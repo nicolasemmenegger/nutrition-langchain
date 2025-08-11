@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nutrition Chat</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <header class="chat-header">
+            <h1>🥗 Nutrition Chat</h1>
+            <div class="daily-summary">
+                <div class="summary-item">
+                    <span class="label">Cal:</span>
+                    <span id="total-calories">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">P:</span>
+                    <span id="total-protein">0g</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">C:</span>
+                    <span id="total-carbs">0g</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">F:</span>
+                    <span id="total-fat">0g</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="chat-messages" id="chat-messages">
+            <div class="message bot-message">
+                <div class="message-content">
+                    <div class="avatar">🤖</div>
+                    <div class="text">
+                        Hi! I'm your AI nutrition coach. I'm here to help you with:
+                        <br>• Tracking your food intake and nutrition
+                        <br>• Providing nutritional information about foods
+                        <br>• Answering questions about healthy eating
+                        <br>• Giving personalized nutrition advice
+                        <br><br>Just tell me what you ate or ask me any nutrition questions!
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <div class="input-wrapper">
+                <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                <button id="image-btn" class="image-btn" title="Upload image">📷</button>
+                <input type="text" id="chat-input" placeholder="Type what you ate or ask a nutrition question..." maxlength="500">
+                <button id="send-btn" class="send-btn" title="Send message">➤</button>
+            </div>
+            <div id="image-preview" class="image-preview" style="display: none;">
+                <img id="preview-img" src="" alt="Preview">
+                <button id="remove-image" class="remove-image">×</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "nutrition-tracker",
+  "version": "1.0.0",
+  "description": "AI-powered nutrition tracking application with chat interface",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "dev": "python -m http.server 8000",
+    "backend": "python start_langchain.py",
+    "backend-old": "python start_backend.py",
+    "install-backend": "pip install -r requirements.txt",
+    "dev-full": "concurrently \"npm run backend\" \"npm start\""
+  },
+  "keywords": ["nutrition", "health", "tracker", "calories", "ai", "openai", "fastapi"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
