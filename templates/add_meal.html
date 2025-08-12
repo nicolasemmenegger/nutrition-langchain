@@ -114,7 +114,6 @@
           <h3 class="font-medium">Review & Edit</h3>
           <div class="flex gap-2">
             <button type="button" id="ai-add-row" class="px-2 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm">+ Add Row</button>
-            <button type="button" id="ai-accept" class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700">Use These Values</button>
           </div>
         </div>
         <div id="ai-rows" class="space-y-2"></div>
@@ -262,7 +261,9 @@
 
       if (Array.isArray(data.items) && data.items.length) {
         renderAIReview(data.items);
-        addMsg('assistant', 'I drafted an ingredient list below. Review, edit, then click “Use These Values”.');
+        addMsg('assistant', 'I drafted an ingredient list below. Review, edit, then click "Submit Meal".');
+        chatInput.disabled = true;
+        chatSend.disabled = true;
       }
     } catch (e) {
       replaceLastAssistant('Sorry—there was an error. Please try again.');
@@ -280,7 +281,6 @@
   const aiReview = document.getElementById('ai-review');
   const aiRows   = document.getElementById('ai-rows');
   const aiAddRow = document.getElementById('ai-add-row');
-  const aiAccept = document.getElementById('ai-accept');
 
   function rebuildAllIngredientSelects(ingredients) {
     // rebuild the cached HTML string
@@ -331,11 +331,5 @@
     e.target.closest('.ingredient-row').remove();
   });
   aiAddRow.addEventListener('click', () => aiRows.insertAdjacentHTML('beforeend', makeRowHTML()));
-  aiAccept.addEventListener('click', () => {
-    // Copy AI rows into manual list and switch mode for final edit/submit
-    ingredientList.innerHTML = aiRows.innerHTML;
-    setMode('manual');
-    window.scrollTo({ top: ingredientList.getBoundingClientRect().top + window.scrollY - 100, behavior: 'smooth' });
-  });
 </script>
 {% endblock %}

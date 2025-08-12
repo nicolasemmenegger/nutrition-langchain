@@ -72,7 +72,7 @@ def ai_chat():
     # Parse LLM JSON
     try:
         parsed = json.loads(raw)
-        assistant_html = parsed.get("assistant_html") or "<p>Parsed.</p>"
+        assistant_html = parsed.get("reply_html") or "<p>Parsed.</p>"
         raw_items = parsed.get("items") or []
     except Exception:
         assistant_html = "<p>Parsed, but the response wasn't valid JSON. Please adjust and resend.</p>"
