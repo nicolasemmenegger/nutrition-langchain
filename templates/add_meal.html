@@ -274,6 +274,8 @@
   document.getElementById('clear-chat').addEventListener('click', () => {
     if (!confirm('Clear chat history for this session?')) return;
     chatWindow.innerHTML = '';
+    chatInput.disabled = false;
+    chatSend.disabled = false;
     localStorage.removeItem('lettuce_ai_thread');
   });
 
