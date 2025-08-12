@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% block title %}Lettuce{% endblock %}
+
+{% block content %}
+{% include "navbar.html" %}
+
+<div class="flex flex-col items-center justify-center min-h-screen pt-16">
+  <h1 class="text-2xl font-bold text-primary mb-6">Add Meal</h1>
+
+  <!-- Final submit form (manual or accepted AI results) -->
+  <form id="meal-form" action="{{ url_for('views.add_meal') }}" method="post" class="w-full max-w-2xl space-y-5">
+    <!-- Mode toggle -->
+    <input type="hidden" name="entry_mode" id="entry_mode" value="manual">
+    <div class="inline-flex rounded-md shadow-sm border border-gray-200 overflow-hidden" role="tablist">
+      <button type="button" id="btn-manual" class="px-4 py-2 text-sm font-medium bg-blue-600 text-white" role="tab" aria-selected="true" aria-controls="panel-manual">
+        Manual
+      </button>
+      <button type="button" id="btn-ai" class="px-4 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50" role="tab" aria-selected="false" aria-controls="panel-ai">
+        AI (beta)
+      </button>
+    </div>
+
+    <!-- Shared fields (one per line) -->
+    <div>
+      <label for="date" class="block font-medium mb-1">Date</label>
+      <input class="border-2 border-gray-300 rounded-md p-2 w-full" type="date" name="date" required>
+    </div>
+    <div>
+      <label for="meal_type" class="block font-medium mb-1">Meal Type</label>
+      <select class="border-2 border-gray-300 rounded-md p-2 w-full" name="meal_type" required>
+        <option value="breakfast">Breakfast</option>
+        <option value="lunch">Lunch</option>
+        <option value="dinner">Dinner</option>
+        <option value="snack">Snack</option>
+      </select>
+    </div>
+    <div>
+      <label for="name" class="block font-medium mb-1">Meal Name</label>
+      <input class="border-2 border-gray-300 rounded-md p-2 w-full" type="text" name="name" placeholder="Meal Name" required>
+    </div>
+
+    <!-- MANUAL MODE -->
+    <section id="panel-manual" role="tabpanel" aria-labelledby="btn-manual" class="space-y-3">
+      <div class="flex items-center justify-between">
+        <label class="block font-medium">Ingredients</label>
+        <button type="button" id="add-ingredient" class="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700">+ Add Ingredient</button>
+      </div>
+
+      <div id="ingredient-list" class="space-y-2">
+        <div class="flex items-center gap-2 ingredient-row">
+          <select class="ingredient-select border-2 border-gray-300 rounded-md p-2 flex-1 bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  name="ingredient_name[]" required>
+            {% for ingredient in ingredients %}
+              <option value="{{ ingredient.id }}">{{ ingredient.name }}</option>
+            {% endfor %}
+          </select>
+          <input class="border-2 border-gray-300 rounded-md p-2 w-28 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                 type="number" min="0" step="1" name="ingredient_weight[]" placeholder="grams" required>
+          <button type="button" class="remove-ingredient px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Remove</button>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500">Tip: grams should be net weight used (e.g., cooked weight).</p>
+    </section>
+
+    <!-- AI MODE: chat UI + review -->
+    <section id="panel-ai" role="tabpanel" aria-labelledby="btn-ai" class="space-y-4 hidden">
+      <!-- Chat window -->
+      <div class="border-2 border-gray-200 rounded-lg h-80 overflow-y-auto p-3 bg-white" id="chat-window" aria-live="polite"></div>
+
+      <!-- Composer -->
+      <div id="chat-composer" class="space-y-3">
+        <!-- Attachment preview bar -->
+        <div id="attachment-bar" class="hidden w-full bg-gray-100 rounded-2xl p-3 flex items-center gap-3">
+          <img id="att-thumb" class="h-16 w-16 rounded-md object-cover bg-white/70" alt="Attachment preview">
+          <div class="flex-1 font-medium text-gray-900 truncate" id="att-name">filename.png</div>
+          <button type="button" id="att-remove" class="px-3 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 active:bg-red-700">
+            Remove
+          </button>
+        </div>
+
+        <!-- Input + Send -->
+        <div class="flex items-center gap-3">
+          <input id="chat-input" type="text"
+                 class="flex-1 h-12 px-5 border-2 border-gray-300 rounded-full bg-white text-gray-800 placeholder:text-gray-400
+                        focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                 placeholder="Describe your meal or ask a nutrition question...">
+          <!-- Secondary button style -->
+          <button type="button" id="chat-send"
+                  class="h-12 px-6 btn btn-primary">
+            Send
+          </button>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-3">
+          <label for="chat-photo"
+                 class="inline-flex items-center gap-2 px-4 py-2 rounded-full btn btn-secondary cursor-pointer">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+            <span>Add Photo</span>
+          </label>
+          <input id="chat-photo" type="file" accept="image/*" class="hidden">
+
+          <button type="button" id="clear-chat"
+                  class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-500 text-white hover:bg-red-600">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>Clear Chat</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Review/confirm section (appears when AI returns parsed items) -->
+      <div id="ai-review" class="hidden">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-medium">Review & Edit</h3>
+          <div class="flex gap-2">
+            <button type="button" id="ai-add-row" class="px-2 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm">+ Add Row</button>
+            <button type="button" id="ai-accept" class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700">Use These Values</button>
+          </div>
+        </div>
+        <div id="ai-rows" class="space-y-2"></div>
+        <p class="text-xs text-gray-500">Confirm the parsed ingredients and grams. Edit as needed before applying.</p>
+      </div>
+    </section>
+
+    <!-- Final submit -->
+    <div>
+      <button id="submit-btn" class="btn btn-primary w-full py-2" type="submit">Submit Meal</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // --- Mode toggle ---
+  const btnManual = document.getElementById('btn-manual');
+  const btnAI = document.getElementById('btn-ai');
+  const panelManual = document.getElementById('panel-manual');
+  const panelAI = document.getElementById('panel-ai');
+  const entryModeInput = document.getElementById('entry_mode');
+
+  function setMode(mode) {
+    const isManual = mode === 'manual';
+    entryModeInput.value = mode;
+    btnManual.className = isManual ? 'px-4 py-2 text-sm font-medium bg-blue-600 text-white' : 'px-4 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50';
+    btnAI.className = !isManual ? 'px-4 py-2 text-sm font-medium bg-blue-600 text-white' : 'px-4 py-2 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50';
+    panelManual.classList.toggle('hidden', !isManual);
+    panelAI.classList.toggle('hidden', isManual);
+    toggleInputs(panelManual, isManual);
+    toggleInputs(panelAI, !isManual);
+    try { localStorage.setItem('lettuce_entry_mode', mode); } catch(e) {}
+  }
+  function toggleInputs(container, enable) {
+    container.querySelectorAll('input, select, textarea').forEach(el => { el.disabled = !enable; });
+  }
+  setMode(localStorage.getItem('lettuce_entry_mode') || 'manual');
+  btnManual.addEventListener('click', () => setMode('manual'));
+  btnAI.addEventListener('click', () => setMode('ai'));
+
+  // --- Manual rows ---
+  const ingredientList = document.getElementById('ingredient-list');
+  const addBtn = document.getElementById('add-ingredient');
+  let ingredientOptionsHTML = `{% for ingredient in ingredients %}<option value="{{ ingredient.id }}">{{ ingredient.name }}</option>{% endfor %}`;
+  function makeRowHTML() {
+    return `
+      <div class="flex items-center gap-2 ingredient-row">
+        <select class="ingredient-select border-2 border-gray-300 rounded-md p-2 flex-1 bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" name="ingredient_name[]" required>
+          ${ingredientOptionsHTML}
+        </select>
+        <input class="border-2 border-gray-300 rounded-md p-2 w-28 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" type="number" min="0" step="1" name="ingredient_weight[]" placeholder="grams" required>
+        <button type="button" class="remove-ingredient px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Remove</button>
+      </div>`;
+  }
+  if (addBtn) {
+    addBtn.addEventListener('click', () => ingredientList.insertAdjacentHTML('beforeend', makeRowHTML()));
+    ingredientList.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('remove-ingredient')) return;
+      const rows = ingredientList.querySelectorAll('.ingredient-row');
+      if (rows.length <= 1) return alert('At least one ingredient is required.');
+      e.target.closest('.ingredient-row').remove();
+    });
+  }
+
+  // --- Chat window helpers ---
+  const chatWindow = document.getElementById('chat-window');
+  function addMsg(role, html) {
+    const wrap = document.createElement('div');
+    wrap.className = role === 'user' ? 'mb-3 flex justify-end' : 'mb-3 flex justify-start';
+    const bubble = document.createElement('div');
+    bubble.className = role === 'user'
+      ? 'max-w-[80%] rounded-2xl px-3 py-2 bg-blue-600 text-white shadow'
+      : 'max-w-[80%] rounded-2xl px-3 py-2 bg-gray-100 text-gray-900 shadow';
+    bubble.innerHTML = html;
+    wrap.appendChild(bubble);
+    chatWindow.appendChild(wrap);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+  function replaceLastAssistant(html) {
+    const last = Array.from(chatWindow.children).reverse()
+      .find(el => el.firstChild?.className?.includes('bg-gray-100'));
+    if (last) last.firstChild.innerHTML = html;
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  }
+
+  // --- Composer behavior ---
+  const chatInput = document.getElementById('chat-input');
+  const chatSend  = document.getElementById('chat-send');
+  const photoInput = document.getElementById('chat-photo');
+  const attBar   = document.getElementById('attachment-bar');
+  const attThumb = document.getElementById('att-thumb');
+  const attNameEl= document.getElementById('att-name');
+  const attRemove= document.getElementById('att-remove');
+
+  photoInput.addEventListener('change', () => {
+    const f = photoInput.files?.[0];
+    if (!f) { hideAttachment(); return; }
+    attThumb.src = URL.createObjectURL(f);
+    attNameEl.textContent = f.name;
+    attBar.classList.remove('hidden');
+  });
+  function hideAttachment() {
+    attBar.classList.add('hidden');
+    attThumb.src = '';
+    attNameEl.textContent = '';
+    photoInput.value = '';
+  }
+  attRemove.addEventListener('click', hideAttachment);
+
+  // Send → /ai_chat
+  chatSend.addEventListener('click', async () => {
+    const text = (chatInput.value || '').trim();
+    const file = photoInput.files?.[0] || null;
+    if (!text && !file) return;
+
+    let userHTML = '';
+    if (text) userHTML += `<div>${escapeHtml(text)}</div>`;
+    if (file) userHTML += `<div class="mt-2 text-xs opacity-80">📷 Photo attached</div>`;
+    addMsg('user', userHTML);
+
+    chatInput.value = '';
+    hideAttachment();
+
+    const fd = new FormData();
+    if (text) fd.append('message', text);
+    if (file) fd.append('image', file);
+    const thread = localStorage.getItem('lettuce_ai_thread') || crypto.randomUUID();
+    localStorage.setItem('lettuce_ai_thread', thread);
+    fd.append('thread_id', thread);
+
+    addMsg('assistant', '<em>Thinking…</em>');
+    try {
+      const resp = await fetch('{{ url_for("api.ai_chat") }}', { method: 'POST', body: fd });
+      const data = await resp.json(); // { reply_html, items? }
+
+      console.log("Data: ", data);
+      if (data.ingredients) {
+        rebuildAllIngredientSelects(data.ingredients);
+      }
+
+      console.log("Ingredients List: ", data.ingredients);
+      replaceLastAssistant(data.reply_html || 'OK');
+
+      if (Array.isArray(data.items) && data.items.length) {
+        renderAIReview(data.items);
+        addMsg('assistant', 'I drafted an ingredient list below. Review, edit, then click “Use These Values”.');
+      }
+    } catch (e) {
+      replaceLastAssistant('Sorry—there was an error. Please try again.');
+      console.error(e);
+    }
+  });
+
+  document.getElementById('clear-chat').addEventListener('click', () => {
+    if (!confirm('Clear chat history for this session?')) return;
+    chatWindow.innerHTML = '';
+    localStorage.removeItem('lettuce_ai_thread');
+  });
+
+  // --- Review editor (AI results) ---
+  const aiReview = document.getElementById('ai-review');
+  const aiRows   = document.getElementById('ai-rows');
+  const aiAddRow = document.getElementById('ai-add-row');
+  const aiAccept = document.getElementById('ai-accept');
+
+  function rebuildAllIngredientSelects(ingredients) {
+    // rebuild the cached HTML string
+    ingredientOptionsHTML = '<option value="" disabled selected>— select ingredient —</option>' +
+        ingredients.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+
+    // update every select currently on the page and preserve its selection if possible
+    document.querySelectorAll('select.ingredient-select').forEach(sel => {
+        const prev = sel.value;          // remember current selection
+        sel.innerHTML = ingredientOptionsHTML;
+        if (prev && [...sel.options].some(o => o.value === prev)) {
+        sel.value = prev;              // restore selection if it still exists
+        } else {
+        sel.value = '';                // keep placeholder if no previous or new one
+        }
+    });
+    }
+
+  function renderAIReview(items) {
+    aiRows.innerHTML = '';
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2 ingredient-row';
+      row.innerHTML = `
+        <select class="ingredient-select border-2 border-gray-300 rounded-md p-2 flex-1 bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" name="ingredient_name[]" required>
+          ${ingredientOptionsHTML}
+        </select>
+        <input class="border-2 border-gray-300 rounded-md p-2 w-28 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" type="number" min="0" step="1" name="ingredient_weight[]" placeholder="grams" required>
+        <button type="button" class="remove-ingredient px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Remove</button>
+      `;
+      aiRows.appendChild(row);
+      const sel = row.querySelector('select[name="ingredient_name[]"]');
+      const inp = row.querySelector('input[name="ingredient_weight[]"]');
+      if (item.ingredient_id) sel.value = String(item.ingredient_id);
+      else if (item.ingredient_name) {
+        [...sel.options].some(opt => {
+          if (opt.text.toLowerCase() === item.ingredient_name.toLowerCase()) { sel.value = opt.value; return true; }
+          return false;
+        });
+      }
+      if (item.grams != null) inp.value = item.grams;
+    });
+    aiReview.classList.remove('hidden');
+  }
+
+  aiRows.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('remove-ingredient')) return;
+    e.target.closest('.ingredient-row').remove();
+  });
+  aiAddRow.addEventListener('click', () => aiRows.insertAdjacentHTML('beforeend', makeRowHTML()));
+  aiAccept.addEventListener('click', () => {
+    // Copy AI rows into manual list and switch mode for final edit/submit
+    ingredientList.innerHTML = aiRows.innerHTML;
+    setMode('manual');
+    window.scrollTo({ top: ingredientList.getBoundingClientRect().top + window.scrollY - 100, behavior: 'smooth' });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Sign Up - Lettuce{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-center min-h-screen bg-[var(--medical-primary-light)]">
+  <div class="w-full max-w-md">
+    <!-- Signup Card -->
+    <div class="bg-white rounded-xl shadow-xs p-6">
+      <h2 class="text-lg font-semibold medical-text-primary mb-4 text-center">Create Account</h2>
+
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert {{ 'error' if category == 'error' else 'success' }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="/signup" class="space-y-6" id="signupForm">
+        <div>
+          <label for="username" class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            required
+            class="form-input w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none touch-target"
+            placeholder="Choose a username"
+            autocomplete="username"
+          >
+        </div>
+
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            required
+            class="form-input w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none touch-target"
+            placeholder="Enter your email"
+            autocomplete="email"
+          >
+        </div>
+
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            class="form-input w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none touch-target"
+            placeholder="Create a password"
+            autocomplete="new-password"
+          >
+          <div id="passwordStrength" class="password-strength mt-2"></div>
+        </div>
+
+        <div>
+          <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+          <input
+            type="password"
+            id="confirm_password"
+            name="confirm_password"
+            required
+            class="form-input w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none touch-target"
+            placeholder="Confirm your password"
+            autocomplete="new-password"
+          >
+        </div>
+
+        <button
+          type="submit"
+          class="btn-primary w-full py-3 px-4 text-white font-semibold rounded-lg touch-target text-center"
+          id="submitBtn"
+        >
+          Create Account
+        </button>
+      </form>
+
+      <div class="mt-6 text-center">
+        <p class="text-gray-600">
+          Already have an account?
+          <a href="{{ url_for('views.login') }}" class="text-[var(--medical-primary)] hover:underline font-medium">
+            Sign in
+          </a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  lucide.createIcons();
+
+  const signupForm = document.getElementById('signupForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const passwordInput = document.getElementById('password');
+  const confirmPasswordInput = document.getElementById('confirm_password');
+  const passwordStrength = document.getElementById('passwordStrength');
+
+  function checkPasswordStrength(password) {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    if (strength < 3) return 'weak';
+    if (strength < 5) return 'medium';
+    return 'strong';
+  }
+
+  passwordInput.addEventListener('input', function() {
+    const strength = checkPasswordStrength(this.value);
+    passwordStrength.className = `password-strength strength-${strength}`;
+  });
+
+  signupForm.addEventListener('submit', function(e) {
+    const password = passwordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
+
+    if (password !== confirmPassword) {
+      e.preventDefault();
+      alert('Passwords do not match!');
+      return;
+    }
+
+    submitBtn.classList.add('btn-loading');
+    submitBtn.disabled = true;
+  });
+</script>
+{% endblock %}

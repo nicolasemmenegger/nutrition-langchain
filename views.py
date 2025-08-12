@@ -1,0 +1,158 @@
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from auth import login_required, create_user, authenticate_user
+from models import Ingredient, Meal, IngredientUsage, MealNutrition, db
+from datetime import datetime
+import json
+from utils import calculate_meal_nutrition, get_meals_for_date
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+
+# Create blueprint for page views
+views_bp = Blueprint('views', __name__)
+
+limiter = Limiter(
+    get_remote_address,
+    default_limits=["10 per minute"]
+)
+
+
+@limiter.limit("1 per minute")
+@views_bp.route('/')
+def index():
+    """Home page"""
+    if 'user_id' in session:
+        return redirect(url_for('views.dashboard'))
+    return render_template('login.html')
+
+
+@limiter.limit("1 per minute")
+@views_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page and authentication"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        print(f"Login attempt for username: {username}, {password}")
+        if not username or not password:
+            flash('Please provide both username and password.', 'error')
+            return render_template('login.html')
+        
+        user = authenticate_user(username, password)
+        if user:
+            session['user_id'] = user.id
+            session['username'] = user.username
+            flash('Login successful!', 'success')
+            print("Redirecting to dashboard...")
+            return redirect(url_for('views.dashboard'))
+        else:
+            flash('Invalid username or password.', 'error')
+    
+    return render_template('login.html')
+
+
+@limiter.limit("1 per minute")
+@views_bp.route('/signup', methods=['GET', 'POST'])
+def signup():
+    """Signup page and user registration"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validation
+        if not all([username, email, password, confirm_password]):
+            flash('Please fill in all fields.', 'error')
+            return render_template('signup.html')
+        
+        if password != confirm_password:
+            flash('Passwords do not match.', 'error')
+            return render_template('signup.html')
+        
+        if len(password) < 6:
+            flash('Password must be at least 6 characters long.', 'error')
+            return render_template('signup.html')
+        
+        try:
+            # Check if user already exists
+            from auth import get_user_by_username, get_user_by_email
+            
+            if get_user_by_username(username):
+                flash('Username already exists.', 'error')
+                return render_template('signup.html')
+            
+            if get_user_by_email(email):
+                flash('Email already registered.', 'error')
+                return render_template('signup.html')
+            
+            # Create new user
+            user = create_user(username, email, password)
+            flash('Account created successfully! Please log in.', 'success')
+            return redirect(url_for('views.login'))
+            
+        except Exception as e:
+            flash(f'Error creating account: {str(e)}', 'error')
+            return render_template('signup.html')
+    
+    return render_template('signup.html')
+
+
+@views_bp.route('/dashboard', methods=['GET', 'POST'])
+@limiter.limit("1 per minute")
+@login_required
+def dashboard():
+    """Main dashboard interface page"""
+    if request.method == 'POST':
+        date = request.form.get('date')
+        meals_grouped = get_meals_for_date(date, session['user_id'])
+        return render_template('dashboard.html', meals=meals_grouped)
+    else:
+        today = datetime.now().date()
+        meals_grouped = get_meals_for_date(today, session['user_id'])
+    return render_template('dashboard.html', meals=meals_grouped)
+
+@limiter.limit("1 per minute")
+@views_bp.route('/add_meal', methods=['GET', 'POST'])
+def add_meal():
+    """Add a meal"""
+    if request.method == 'POST':
+        date = datetime.strptime(request.form.get('date'), '%Y-%m-%d').date()
+        name = request.form.get('name')
+        ingredients = request.form.getlist('ingredient_name[]')
+        ingredient_weights = request.form.getlist('ingredient_weight[]')
+
+        for ingredient in ingredients:
+            ingredient_usage = IngredientUsage.query.filter_by(ingredient_id=ingredient, user_id=session['user_id']).first()
+            if ingredient_usage:
+                ingredient_usage.quantity += float(ingredient_weights[ingredients.index(ingredient)])
+                db.session.commit()
+            else:
+                ingredient_usage = IngredientUsage(ingredient_id=ingredient, user_id=session['user_id'], quantity=float(ingredient_weights[ingredients.index(ingredient)]))
+                db.session.add(ingredient_usage)
+
+        meal_type = request.form.get('meal_type')
+        ingredients_list = []
+        for ingredient, weight in zip(ingredients, ingredient_weights):
+            ingredients_list.append({'ingredient_id': ingredient, 'weight': weight})
+        meal = Meal(name=name, ingredients=json.dumps(ingredients_list), meal_type=meal_type, user_id=session['user_id'], date=date)
+        db.session.add(meal)
+        db.session.commit()
+        calories, protein, carbs, fat = calculate_meal_nutrition(ingredients, ingredient_weights)
+        meal_nutrition = MealNutrition(meal_id=meal.id, calories=calories, protein=protein, carbs=carbs, fat=fat)
+        db.session.add(meal_nutrition)
+        db.session.commit()
+        print(f"Adding meal: {meal}")
+        
+        return redirect(url_for('views.dashboard'))
+    else:
+        ingredients = Ingredient.query.all()
+        return render_template('add_meal.html', ingredients=ingredients)
+
+@limiter.limit("1 per minute")
+@views_bp.route('/logout')
+def logout():
+    """Logout user and clear session"""
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('views.index')) 
