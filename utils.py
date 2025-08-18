@@ -76,7 +76,7 @@ _STOP = {"fresh","organic","raw","cooked","dry","dried","unsalted","salted",
 _WORD = re.compile(r"[A-Za-z0-9]+")
 
 def _norm(s: str) -> str:
-    s = s.lower()
+    s = (s or "").lower().replace("’", "'").strip()
     toks = [t for t in _WORD.findall(s) if t not in _STOP]
     return " ".join(toks)
 
@@ -138,7 +138,3 @@ def _fuzzy_match(name: str, names: List[str], ids: List[int], cutoff: int = 90) 
     if best_score >= cutoff:
         return ids[best_idx]
     return None
-
-def _norm(s: str) -> str:
-    # normalize e.g., "Kellogg’s  Cornflakes " → "kellogg's cornflakes"
-    return " ".join((s or "").lower().replace("’", "'").strip().split())

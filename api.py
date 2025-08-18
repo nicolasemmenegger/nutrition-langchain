@@ -116,7 +116,7 @@ def log_meal():
         # Create meal record
         meal = Meal(
             date=datetime.fromisoformat(timestamp).date(),
-            user_id=1,  # TODO: Use actual user ID when auth is implemented
+            user_id=session['user_id'],
             name=notes or 'Meal',
             ingredients=json.dumps(items),
             meal_type='meal'  # TODO: Determine meal type based on time

@@ -21,16 +21,18 @@ class CoordinatorAgent(BaseAgent):
             response_html += "<p>I see you've uploaded an image. Let me analyze the food items in it for you...</p>"
             return "analyze_meal", response_html
         
-        # Build context from chat history
-        history_context = ""
+        # Build messages with recent chat history as actual turns
+        history_messages = []
         if chat_history:
-            history_context = "\n".join([
-                f"{msg.role}: {msg.content[:200]}" 
-                for msg in chat_history[-5:]  # Last 5 messages for context
-            ])
-        
+            # Use the most recent few messages to preserve context
+            for msg in chat_history[-6:]:
+                history_messages.append({
+                    "role": msg.role,
+                    "content": msg.content[:1000]
+                })
+
         messages = [
-            {"role": "system", "content": f"""
+            {"role": "system", "content": """
                 You are a nutrition assistant coordinator. Your job is to:
                 1. Understand what the user wants
                 2. Classify their request into the appropriate category
@@ -43,21 +45,18 @@ class CoordinatorAgent(BaseAgent):
                 - recipe_generation: User wants recipe suggestions
                 - conversation: General chat, greetings, or off-topic
                 - clarification: User's intent is clear but needs more details (e.g., "I had breakfast" without specifics)
-                
+
                 IMPORTANT: Look at the conversation history. If you previously asked for clarification about something:
                 - If the user provides the requested details, classify based on the original intent + new details
                 - For example: If you asked "What did you have for breakfast?" and they say "eggs and toast", classify as analyze_meal
                 - If you asked "What kind of recipe?" and they say "pasta", classify as recipe_generation
-                
-                Recent conversation:
-                {history_context}
-                
+
                 Return a JSON object with:
-                {{
+                {
                     "category": "one of the categories above",
                     "response": "Your conversational response to the user",
                     "follow_up": "Optional follow-up question if needed"
-                }}
+                }
                 
                 For meal logging (analyze_meal), your response should:
                 - Acknowledge what they're logging
@@ -69,16 +68,12 @@ class CoordinatorAgent(BaseAgent):
                 - Be friendly and encouraging
                 - Give examples of what information would help
                 
-                Example responses:
-                - "I'll help you log that breakfast! Let me analyze the eggs and toast for you..."
-                - "I see you had a Big Mac - let me look up the exact nutrition information for you..."
-                - "I'd be happy to suggest some healthy recipes based on your preferences..."
-                
                 Formatting Instructions:
                 - You CANNOT use emoji's
                 - You should keep responses fairly short, and not provide too many pointers at once. Focus on what seems most important.
                 - Talk like a human. Don't include titles or subtitles. Just output some text, as I would when I text a friend.
-            """},
+            """}
+        ] + history_messages + [
             {"role": "user", "content": user_input}
         ]
         
@@ -145,7 +140,7 @@ class CoordinatorAgent(BaseAgent):
         # Classify and generate response
         category, coordinator_response = self.classify_and_respond(user_input, chat_history, has_image=bool(image_data))
         
-        # Save user message to history
+        # Save user message to history (immediately after classification)
         user_message = ChatMessage(
             role="user",
             content=user_input,
@@ -153,7 +148,15 @@ class CoordinatorAgent(BaseAgent):
         )
         self.save_chat_message(user_id, user_message)
         
-        # If it's   or clarification, handle it directly without routing
+        # Always save the coordinator's response to ensure continuity across agent calls
+        coordinator_message = ChatMessage(
+            role="assistant",
+            content=coordinator_response,
+            metadata={"type": "coordinator", "category": category}
+        )
+        self.save_chat_message(user_id, coordinator_message)
+        
+        # If it's conversation or clarification, handle it directly without routing
         if category in ["conversation", "clarification"]:
             state["category"] = category
             state["response"] = {
@@ -184,6 +187,7 @@ class CoordinatorAgent(BaseAgent):
             # For other categories, store the coordinator's initial response
             state["category"] = category
             state["coordinator_response"] = coordinator_response
-            state["chat_history"] = chat_history
+            # Refresh chat history to include the just-saved user+coordinator messages
+            state["chat_history"] = self.get_chat_history(user_id)
         
         return state

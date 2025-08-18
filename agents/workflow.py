@@ -54,7 +54,17 @@ def create_nutrition_workflow(openai_api_key: str = None):
             follow_up = coordinator.generate_follow_up("analyze_meal", state.get("response"))
             
             if state.get("response"):
-                state["response"]["reply_html"] = coordinator_response + follow_up
+                combined = coordinator_response + follow_up
+                state["response"]["reply_html"] = combined
+                # Persist the combined response so the next turn has full assistant context
+                try:
+                    from .base import ChatMessage
+                    coordinator.save_chat_message(
+                        state.get("user_id", "default"),
+                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                    )
+                except Exception as e:
+                    print(f"Failed saving combined follow-up: {e}")
             
             return state
         except Exception as e:
@@ -75,7 +85,17 @@ def create_nutrition_workflow(openai_api_key: str = None):
             follow_up = coordinator.generate_follow_up("web_search", state.get("response"))
             
             if state.get("response"):
-                state["response"]["reply_html"] = coordinator_response + follow_up
+                combined = coordinator_response + follow_up
+                state["response"]["reply_html"] = combined
+                # Persist the combined response for continuity
+                try:
+                    from .base import ChatMessage
+                    coordinator.save_chat_message(
+                        state.get("user_id", "default"),
+                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                    )
+                except Exception as e:
+                    print(f"Failed saving combined follow-up (web_search): {e}")
             
             return state
         except Exception as e:
@@ -96,7 +116,17 @@ def create_nutrition_workflow(openai_api_key: str = None):
             follow_up = coordinator.generate_follow_up("recipe_generation", state.get("response"))
             
             if state.get("response"):
-                state["response"]["reply_html"] = coordinator_response + follow_up
+                combined = coordinator_response + follow_up
+                state["response"]["reply_html"] = combined
+                # Persist the combined response for continuity
+                try:
+                    from .base import ChatMessage
+                    coordinator.save_chat_message(
+                        state.get("user_id", "default"),
+                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                    )
+                except Exception as e:
+                    print(f"Failed saving combined follow-up (recipe): {e}")
             
             return state
         except Exception as e:
@@ -116,7 +146,17 @@ def create_nutrition_workflow(openai_api_key: str = None):
             coordinator_response = state.get("coordinator_response", "")
             
             if state.get("response"):
-                state["response"]["reply_html"] = coordinator_response + state["response"]["reply_html"]
+                combined = coordinator_response + state["response"]["reply_html"]
+                state["response"]["reply_html"] = combined
+                # Persist the combined response for continuity
+                try:
+                    from .base import ChatMessage
+                    coordinator.save_chat_message(
+                        state.get("user_id", "default"),
+                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                    )
+                except Exception as e:
+                    print(f"Failed saving combined follow-up (coaching): {e}")
             
             return state
         except Exception as e:

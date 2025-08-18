@@ -34,7 +34,8 @@ class BaseAgent(ABC):
             # Import here to avoid circular imports
             from models import ChatHistory
             
-            history_records = ChatHistory.get_user_history(user_id, limit)
+            # Ensure consistent string user_id keying
+            history_records = ChatHistory.get_user_history(str(user_id), limit)
             
             messages = []
             for record in reversed(history_records):  # Reverse to get chronological order
@@ -60,7 +61,7 @@ class BaseAgent(ABC):
             from models import ChatHistory
             
             ChatHistory.save_message(
-                user_id=user_id,
+                user_id=str(user_id),
                 role=message.role,
                 content=message.content,
                 metadata=message.metadata,

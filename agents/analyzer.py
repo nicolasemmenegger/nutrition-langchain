@@ -101,7 +101,7 @@ class AnalyzerAgent(BaseAgent):
             
             ingredient_id = None
             if names and ids:
-                ingredient_id = _fuzzy_match(name, names, ids, cutoff=88)
+                ingredient_id = _fuzzy_match(name, names, ids, cutoff=95)
             
             if ingredient_id is None:
                 unknown_names.append(name)
