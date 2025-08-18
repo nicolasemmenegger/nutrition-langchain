@@ -153,6 +153,7 @@
 .user-message {
     align-self: flex-end;
     flex-direction: row-reverse;
+    color: white;
 }
 
 .assistant-message {
@@ -194,6 +195,12 @@
 
 .assistant-message .message-content {
     border-bottom-left-radius: 0.25rem;
+}
+
+.user-message .message-content p {
+    margin: 0;
+    line-height: 1.5;
+    color: white;
 }
 
 .message-content p {
@@ -584,21 +591,6 @@
     background: var(--bg-tertiary);
 }
 
-/* Loading Overlay */
-.loading-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
 .spinner {
     width: 50px;
     height: 50px;
@@ -606,12 +598,6 @@
     border-top-color: white;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-}
-
-.loading-overlay p {
-    color: white;
-    margin-top: 1rem;
-    font-size: 1.1rem;
 }
 
 /* Animations */

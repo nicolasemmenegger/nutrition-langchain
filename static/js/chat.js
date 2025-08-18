@@ -6,7 +6,6 @@ class NutritionChat {
         this.chatForm = document.getElementById('chatForm');
         this.imageInput = document.getElementById('imageInput');
         this.sidePanel = document.getElementById('sidePanel');
-        this.loadingOverlay = document.getElementById('loadingOverlay');
         
         this.currentImage = null;
         this.pendingMealData = null;
@@ -445,11 +444,12 @@ class NutritionChat {
     }
     
     showLoading() {
-        this.loadingOverlay.style.display = 'flex';
+        this.addMessage("Thinking ...", 'assistant', null, true);
     }
     
     hideLoading() {
-        this.loadingOverlay.style.display = 'none';
+        const messages = this.chatMessages.querySelectorAll('.message');
+        messages[messages.length - 1].remove();
     }
     
     scrollToBottom() {

@@ -49,8 +49,8 @@ def login():
             session['user_id'] = user.id
             session['username'] = user.username
             flash('Login successful!', 'success')
-            print("Redirecting to dashboard...")
-            return redirect(url_for('views.dashboard'))
+            print("Redirecting to chat...")
+            return redirect(url_for('views.chat'))
         else:
             flash('Invalid username or password.', 'error')
     
