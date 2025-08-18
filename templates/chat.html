@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nutrition Assistant - Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <h1 class="navbar-brand">
+                <a href="{{ url_for('views.chat') }}">
+                    <i class="fas fa-leaf"></i> Lettuce
+                </a>
+            </h1>
+            <div class="navbar-menu">
+                <a href="{{ url_for('views.chat') }}" class="navbar-item active">
+                    <i class="fas fa-comments"></i> Chat
+                </a>
+                <a href="{{ url_for('views.dashboard') }}" class="navbar-item">
+                    <i class="fas fa-calendar-alt"></i> Calendar
+                </a>
+                <a href="{{ url_for('views.add_meal') }}" class="navbar-item">
+                    <i class="fas fa-plus-circle"></i> Add Meal
+                </a>
+                <div class="navbar-divider"></div>
+                <span class="navbar-user">
+                    <i class="fas fa-user"></i> {{ session.get('username', 'User') }}
+                </span>
+                <a href="{{ url_for('views.logout') }}" class="navbar-item navbar-logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="app-container with-navbar">
+        <!-- Main Chat Area -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2><i class="fas fa-robot"></i> AI Assistant</h2>
+                <div class="header-actions">
+                    <button id="clearChat" class="btn btn-sm btn-outline" title="Clear chat">
+                        <i class="fas fa-trash"></i> Clear
+                    </button>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <!-- Welcome message -->
+                <div class="message assistant-message">
+                    <div class="message-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <p>Hello! I'm your nutrition assistant. I can help you:</p>
+                        <ul>
+                            <li>📝 Log your meals from descriptions or photos</li>
+                            <li>🔍 Find nutrition info for specific foods</li>
+                            <li>👨‍🍳 Get healthy recipe suggestions</li>
+                            <li>💪 Provide personalized nutrition coaching</li>
+                        </ul>
+                        <p>What would you like to do today?</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <form id="chatForm" class="chat-input-form">
+                    <div class="input-group">
+                        <input type="text" 
+                               id="messageInput" 
+                               class="message-input" 
+                               placeholder="Type your message... (e.g., 'I had eggs and toast for breakfast')"
+                               autocomplete="off">
+                        <label for="imageInput" class="btn-icon" title="Upload image">
+                            <i class="fas fa-image"></i>
+                            <input type="file" 
+                                   id="imageInput" 
+                                   accept="image/*" 
+                                   style="display: none;">
+                        </label>
+                        <button type="submit" class="btn-send">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div id="imagePreview" class="image-preview" style="display: none;">
+                        <img id="previewImg" src="" alt="Preview">
+                        <button type="button" id="removeImage" class="remove-image">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Side Panel -->
+        <div class="side-panel" id="sidePanel">
+            <div class="panel-header">
+                <h2 id="panelTitle">Meal Details</h2>
+                <button id="closePanel" class="btn-icon">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="panel-content" id="panelContent">
+                <!-- Dynamic content will be loaded here -->
+            </div>
+
+            <div class="panel-actions" id="panelActions">
+                <!-- Dynamic actions will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Processing your request...</p>
+    </div>
+
+    <!-- Templates for dynamic content -->
+    <template id="mealLogTemplate">
+        <div class="meal-log-content">
+            <h3>Detected Ingredients</h3>
+            <div class="ingredients-list" id="ingredientsList">
+                <!-- Ingredients will be dynamically added here -->
+            </div>
+            
+            <div class="nutrition-summary">
+                <h4>Nutritional Summary</h4>
+                <div class="nutrition-grid" id="nutritionGrid">
+                    <div class="nutrition-item">
+                        <span class="label">Calories:</span>
+                        <span class="value" id="totalCalories">0</span>
+                    </div>
+                    <div class="nutrition-item">
+                        <span class="label">Protein:</span>
+                        <span class="value" id="totalProtein">0g</span>
+                    </div>
+                    <div class="nutrition-item">
+                        <span class="label">Carbs:</span>
+                        <span class="value" id="totalCarbs">0g</span>
+                    </div>
+                    <div class="nutrition-item">
+                        <span class="label">Fat:</span>
+                        <span class="value" id="totalFat">0g</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="meal-notes">
+                <label for="mealNotes">Notes (optional):</label>
+                <textarea id="mealNotes" placeholder="Add any notes about this meal..."></textarea>
+            </div>
+        </div>
+    </template>
+
+    <template id="recipeTemplate">
+        <div class="recipe-content">
+            <div class="recipe-header">
+                <h3 id="recipeName"></h3>
+                <p id="recipeDescription"></p>
+            </div>
+
+            <div class="recipe-meta">
+                <span><i class="fas fa-clock"></i> <span id="recipeTime"></span></span>
+                <span><i class="fas fa-utensils"></i> <span id="recipeServings"></span></span>
+            </div>
+
+            <div class="recipe-section">
+                <h4>Ingredients</h4>
+                <ul id="recipeIngredients"></ul>
+            </div>
+
+            <div class="recipe-section">
+                <h4>Instructions</h4>
+                <ol id="recipeInstructions"></ol>
+            </div>
+
+            <div class="recipe-nutrition">
+                <h4>Nutrition per serving</h4>
+                <div class="nutrition-grid" id="recipeNutrition"></div>
+            </div>
+        </div>
+    </template>
+
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>

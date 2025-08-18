@@ -1,0 +1,468 @@
+// Chat Interface JavaScript
+class NutritionChat {
+    constructor() {
+        this.chatMessages = document.getElementById('chatMessages');
+        this.messageInput = document.getElementById('messageInput');
+        this.chatForm = document.getElementById('chatForm');
+        this.imageInput = document.getElementById('imageInput');
+        this.sidePanel = document.getElementById('sidePanel');
+        this.loadingOverlay = document.getElementById('loadingOverlay');
+        
+        this.currentImage = null;
+        this.pendingMealData = null;
+        this.pendingRecipeData = null;
+        
+        this.init();
+    }
+    
+    init() {
+        // Form submission
+        this.chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.sendMessage();
+        });
+        
+        // Image handling
+        this.imageInput.addEventListener('change', (e) => {
+            this.handleImageSelect(e);
+        });
+        
+        document.getElementById('removeImage').addEventListener('click', () => {
+            this.clearImage();
+        });
+        
+        // Panel controls
+        document.getElementById('closePanel').addEventListener('click', () => {
+            this.closePanel();
+        });
+        
+        // Clear chat
+        document.getElementById('clearChat').addEventListener('click', () => {
+            this.clearChat();
+        });
+        
+        // Auto-resize message input
+        this.messageInput.addEventListener('input', () => {
+            this.autoResize();
+        });
+    }
+    
+    async sendMessage() {
+        const message = this.messageInput.value.trim();
+        
+        if (!message && !this.currentImage) {
+            return;
+        }
+        
+        // Store image reference before clearing
+        const imageToSend = this.currentImage;
+        
+        // Add user message to chat
+        this.addMessage(message, 'user', this.currentImage);
+        
+        // Clear input
+        this.messageInput.value = '';
+        this.clearImage();
+        
+        // Show loading
+        this.showLoading();
+        
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('message', message);
+        
+        if (imageToSend) {
+            formData.append('image', imageToSend);
+            console.log('Sending image with message:', message);
+        }
+        
+        try {
+            const response = await fetch('/api/ai_chat', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            // Hide loading
+            this.hideLoading();
+            
+            // Debug log to see what's returned
+            console.log('Response data:', data);
+            
+            // Add assistant response
+            this.addMessage(data.reply_html, 'assistant', null, true);
+            
+            // Handle different response types based on category
+            if (data.category === 'analyze_meal' && data.items && data.items.length > 0) {
+                console.log('Opening meal panel with items:', data.items);
+                this.showMealPanel(data);
+            } else if (data.category === 'recipe_generation' && data.recipe) {
+                console.log('Opening recipe panel');
+                this.showRecipePanel(data.recipe);
+            } else if (data.category === 'web_search' && data.nutrition_data) {
+                // For web search results, we might want to show a simplified meal panel
+                if (data.nutrition_data.found) {
+                    console.log('Showing nutrition info');
+                    this.showNutritionInfo(data.nutrition_data);
+                }
+            } else {
+                console.log('No panel action taken. Category:', data.category, 'Items:', data.items);
+            }
+            
+            // Scroll to bottom
+            this.scrollToBottom();
+            
+        } catch (error) {
+            console.error('Error:', error);
+            this.hideLoading();
+            this.addMessage('Sorry, there was an error processing your request. Please try again.', 'assistant');
+        }
+    }
+    
+    addMessage(content, sender, image = null, isHtml = false) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${sender}-message`;
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.innerHTML = sender === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        
+        if (image && sender === 'user') {
+            const imgElement = document.createElement('img');
+            imgElement.src = URL.createObjectURL(image);
+            imgElement.className = 'message-image';
+            contentDiv.appendChild(imgElement);
+        }
+        
+        if (content) {
+            if (isHtml) {
+                contentDiv.innerHTML += content;
+            } else {
+                const p = document.createElement('p');
+                p.textContent = content;
+                contentDiv.appendChild(p);
+            }
+        }
+        
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(contentDiv);
+        
+        this.chatMessages.appendChild(messageDiv);
+        this.scrollToBottom();
+    }
+    
+    showMealPanel(data) {
+        // Clone the meal log template
+        const template = document.getElementById('mealLogTemplate');
+        const content = template.content.cloneNode(true);
+        
+        // Clear and set panel content
+        const panelContent = document.getElementById('panelContent');
+        panelContent.innerHTML = '';
+        panelContent.appendChild(content);
+        
+        // Populate ingredients
+        const ingredientsList = document.getElementById('ingredientsList');
+        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0;
+        
+        data.items.forEach((item, index) => {
+            const ingredientDiv = document.createElement('div');
+            ingredientDiv.className = 'ingredient-item';
+            ingredientDiv.innerHTML = `
+                <div class="ingredient-info">
+                    <input type="text" 
+                           id="ingredient-name-${index}" 
+                           value="${item.ingredient_name}" 
+                           class="ingredient-name-input">
+                    <input type="number" 
+                           id="ingredient-amount-${index}" 
+                           value="${item.grams}" 
+                           class="ingredient-amount-input"
+                           min="0"
+                           step="0.1">
+                    <span class="unit">g</span>
+                </div>
+                <button class="btn-remove-ingredient" onclick="nutritionChat.removeIngredient(${index})">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            ingredientsList.appendChild(ingredientDiv);
+            
+            // Calculate totals (would need actual nutrition data from ingredients)
+            // This is simplified - in production, you'd look up actual values
+        });
+        
+        // Store meal data for later
+        this.pendingMealData = data;
+        
+        // Set panel actions
+        const panelActions = document.getElementById('panelActions');
+        panelActions.innerHTML = `
+            <button class="btn-primary" onclick="nutritionChat.confirmMeal()">
+                <i class="fas fa-check"></i> Log Meal
+            </button>
+            <button class="btn-secondary" onclick="nutritionChat.closePanel()">
+                Cancel
+            </button>
+        `;
+        
+        // Update panel title
+        document.getElementById('panelTitle').textContent = 'Review Your Meal';
+        
+        // Show panel
+        this.openPanel();
+        
+        // Add follow-up message
+        this.addMessage("I've detected the ingredients from your meal. Please review them in the panel on the right. Let me know if something seems off or if you'd like to adjust the quantities.", 'assistant');
+    }
+    
+    showRecipePanel(recipe) {
+        // Clone the recipe template
+        const template = document.getElementById('recipeTemplate');
+        const content = template.content.cloneNode(true);
+        
+        // Clear and set panel content
+        const panelContent = document.getElementById('panelContent');
+        panelContent.innerHTML = '';
+        panelContent.appendChild(content);
+        
+        // Populate recipe details
+        document.getElementById('recipeName').textContent = recipe.recipe_name;
+        document.getElementById('recipeDescription').textContent = recipe.description;
+        document.getElementById('recipeTime').textContent = `${recipe.prep_time} min prep, ${recipe.cook_time} min cook`;
+        document.getElementById('recipeServings').textContent = `${recipe.servings} servings`;
+        
+        // Ingredients
+        const ingredientsList = document.getElementById('recipeIngredients');
+        recipe.ingredients.forEach(ing => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span class="ingredient-amount">${ing.amount}</span> 
+                <span class="ingredient-name">${ing.name}</span>
+            `;
+            ingredientsList.appendChild(li);
+        });
+        
+        // Instructions
+        const instructionsList = document.getElementById('recipeInstructions');
+        recipe.instructions.forEach(step => {
+            const li = document.createElement('li');
+            li.textContent = step;
+            instructionsList.appendChild(li);
+        });
+        
+        // Nutrition
+        const nutritionGrid = document.getElementById('recipeNutrition');
+        const nutrition = recipe.nutrition_per_serving;
+        nutritionGrid.innerHTML = `
+            <div class="nutrition-item">
+                <span class="label">Calories:</span>
+                <span class="value">${nutrition.calories}</span>
+            </div>
+            <div class="nutrition-item">
+                <span class="label">Protein:</span>
+                <span class="value">${nutrition.protein}g</span>
+            </div>
+            <div class="nutrition-item">
+                <span class="label">Carbs:</span>
+                <span class="value">${nutrition.carbs}g</span>
+            </div>
+            <div class="nutrition-item">
+                <span class="label">Fat:</span>
+                <span class="value">${nutrition.fat}g</span>
+            </div>
+        `;
+        
+        // Store recipe data
+        this.pendingRecipeData = recipe;
+        
+        // Set panel actions
+        const panelActions = document.getElementById('panelActions');
+        panelActions.innerHTML = `
+            <button class="btn-primary" onclick="nutritionChat.logRecipeAsMeal()">
+                <i class="fas fa-utensils"></i> Log as Meal
+            </button>
+            <button class="btn-secondary" onclick="nutritionChat.saveRecipe()">
+                <i class="fas fa-bookmark"></i> Save Recipe
+            </button>
+            <button class="btn-secondary" onclick="nutritionChat.closePanel()">
+                Close
+            </button>
+        `;
+        
+        // Update panel title
+        document.getElementById('panelTitle').textContent = 'Recipe Suggestion';
+        
+        // Show panel
+        this.openPanel();
+    }
+    
+    showNutritionInfo(nutritionData) {
+        // Create a simplified meal entry from web search results
+        const mealData = {
+            items: [{
+                ingredient_name: nutritionData.food_name,
+                grams: 100,
+                nutrition: nutritionData.per_100g
+            }]
+        };
+        
+        this.showMealPanel(mealData);
+        
+        // Add confidence note
+        const panelContent = document.getElementById('panelContent');
+        const confidenceNote = document.createElement('div');
+        confidenceNote.className = 'confidence-note';
+        confidenceNote.innerHTML = `
+            <p><small>Data confidence: ${nutritionData.confidence}</small></p>
+            <p><small>Source: Web search results</small></p>
+        `;
+        panelContent.appendChild(confidenceNote);
+    }
+    
+    confirmMeal() {
+        // Collect updated meal data
+        const updatedItems = [];
+        this.pendingMealData.items.forEach((item, index) => {
+            const name = document.getElementById(`ingredient-name-${index}`).value;
+            const amount = parseFloat(document.getElementById(`ingredient-amount-${index}`).value);
+            
+            if (name && amount > 0) {
+                updatedItems.push({
+                    ingredient_name: name,
+                    grams: amount,
+                    ingredient_id: item.ingredient_id
+                });
+            }
+        });
+        
+        const notes = document.getElementById('mealNotes').value;
+        
+        // Here you would send the confirmed meal to the backend
+        this.logMeal(updatedItems, notes);
+        
+        // Close panel
+        this.closePanel();
+        
+        // Add confirmation message
+        this.addMessage("Great! I've logged your meal. Your nutritional intake has been recorded. Is there anything else you'd like to track today?", 'assistant');
+    }
+    
+    async logMeal(items, notes) {
+        // Send to backend to save meal
+        try {
+            const response = await fetch('/api/log_meal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    items: items,
+                    notes: notes,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            
+            const data = await response.json();
+            console.log('Meal logged:', data);
+        } catch (error) {
+            console.error('Error logging meal:', error);
+        }
+    }
+    
+    logRecipeAsMeal() {
+        if (!this.pendingRecipeData) return;
+        
+        // Convert recipe ingredients to meal items
+        const items = this.pendingRecipeData.ingredients.map(ing => ({
+            ingredient_name: ing.name,
+            grams: ing.grams || 100  // Default to 100g if not specified
+        }));
+        
+        this.logMeal(items, `Recipe: ${this.pendingRecipeData.recipe_name}`);
+        
+        this.closePanel();
+        this.addMessage(`I've logged "${this.pendingRecipeData.recipe_name}" as your meal. The ingredients have been recorded in your nutrition tracking.`, 'assistant');
+    }
+    
+    saveRecipe() {
+        // Save recipe for later (would implement backend endpoint)
+        console.log('Saving recipe:', this.pendingRecipeData);
+        this.addMessage('Recipe saved to your collection!', 'assistant');
+    }
+    
+    removeIngredient(index) {
+        // Remove ingredient from the list
+        const ingredientItem = document.querySelectorAll('.ingredient-item')[index];
+        if (ingredientItem) {
+            ingredientItem.remove();
+        }
+    }
+    
+    openPanel() {
+        this.sidePanel.classList.add('panel-open');
+    }
+    
+    closePanel() {
+        this.sidePanel.classList.remove('panel-open');
+        this.pendingMealData = null;
+        this.pendingRecipeData = null;
+    }
+    
+    handleImageSelect(e) {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+            this.currentImage = file;
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('imagePreview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    clearImage() {
+        this.currentImage = null;
+        this.imageInput.value = '';
+        document.getElementById('imagePreview').style.display = 'none';
+    }
+    
+    clearChat() {
+        if (confirm('Are you sure you want to clear the chat history?')) {
+            // Keep only the welcome message
+            const messages = this.chatMessages.querySelectorAll('.message');
+            for (let i = 1; i < messages.length; i++) {
+                messages[i].remove();
+            }
+        }
+    }
+    
+    showLoading() {
+        this.loadingOverlay.style.display = 'flex';
+    }
+    
+    hideLoading() {
+        this.loadingOverlay.style.display = 'none';
+    }
+    
+    scrollToBottom() {
+        this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+    }
+    
+    autoResize() {
+        this.messageInput.style.height = 'auto';
+        this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 120) + 'px';
+    }
+}
+
+// Initialize the chat when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.nutritionChat = new NutritionChat();
+});

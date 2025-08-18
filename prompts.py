@@ -1,7 +1,7 @@
 STRUCTURE_SPEC = """
 Return ONLY valid JSON with this schema:
 {
-  "assistant_html": "<p>short status/html</p>",
+  "reply_html": "<p>short status/html</p>",
   "items": [
     { "ingredient_name": "string", "grams": number }
   ]

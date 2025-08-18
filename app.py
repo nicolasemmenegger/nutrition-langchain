@@ -23,6 +23,9 @@ def create_app(config_name=None):
     
     app.config.from_object(config[config_name])
     
+    # Set secret key for sessions
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+    
     # Initialize extensions
     db.init_app(app)
     

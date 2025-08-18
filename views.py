@@ -22,8 +22,14 @@ limiter = Limiter(
 def index():
     """Home page"""
     if 'user_id' in session:
-        return redirect(url_for('views.dashboard'))
+        return redirect(url_for('views.chat'))
     return render_template('login.html')
+
+@views_bp.route('/chat')
+@login_required
+def chat():
+    """New conversational chat interface"""
+    return render_template('chat.html')
 
 
 @limiter.limit("1 per minute")
