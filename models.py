@@ -113,3 +113,9 @@ class ChatHistory(db.Model):
         db.session.add(message)
         db.session.commit()
         return message
+
+    @classmethod
+    def clear_user_history(cls, user_id):
+        """Delete all chat messages for a user"""
+        cls.query.filter_by(user_id=str(user_id)).delete()
+        db.session.commit()

@@ -72,7 +72,9 @@ def _load_ingredient_index() -> Tuple[List[str], List[int]]:
     return list(names), list(ids)
 
 _STOP = {"fresh","organic","raw","cooked","dry","dried","unsalted","salted",
-         "low-fat","lowfat","reduced-fat","lean","skinless","boneless","plain"}
+         "low-fat","lowfat","reduced-fat","lean","skinless","boneless","plain",
+         # common qualifiers that shouldn't block matching
+         "firm","extra-firm","silken","soft","extra"}
 _WORD = re.compile(r"[A-Za-z0-9]+")
 
 def _norm(s: str) -> str:
@@ -113,15 +115,32 @@ def _fuzzy_match(name: str, names: List[str], ids: List[int], cutoff: int = 90) 
         if not cn:
             continue
         # require at least 1 common token
-        if not (q_tokens & _token_set(cn)):
+        cand_tokens = _token_set(cn)
+        if not (q_tokens & cand_tokens):
             continue
-        # avoid big length mismatches (e.g., "egg" vs "whole grain breakfast cereal")
-        if _len_ratio(qn, cn) > 2.0:
+        # avoid big length mismatches unless query tokens are contained in candidate tokens
+        lr = _len_ratio(qn, cn)
+        if not (q_tokens <= cand_tokens) and lr > 3.0:
             continue
         prelim.append((i, cand, cn))
 
     if not prelim:
         return None
+
+    # If query tokens are a subset of candidate tokens, prefer those directly
+    subset = []
+    for i, raw, cn in prelim:
+        if q_tokens <= _token_set(cn):
+            subset.append((i, raw, cn))
+    if subset:
+        best_score = -1.0
+        best_idx = subset[0][0]
+        for i, raw, cn in subset:
+            s = _combined(qn, cn)
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return ids[best_idx]
 
     # Score prelim candidates; keep top-k
     scored = []

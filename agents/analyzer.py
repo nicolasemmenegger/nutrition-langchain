@@ -95,13 +95,17 @@ class AnalyzerAgent(BaseAgent):
         
         for it in raw_items:
             name = (it.get("ingredient_name") or "").strip()
-            grams = float(it.get("grams") or 0)
+            try:
+                grams = float(it.get("grams") or 0)
+            except Exception:
+                grams = 0.0
             if not name or grams <= 0:
                 continue
             
             ingredient_id = None
             if names and ids:
-                ingredient_id = _fuzzy_match(name, names, ids, cutoff=95)
+                # slightly more permissive cutoff to catch lowercase / normalized variants
+                ingredient_id = _fuzzy_match(name, names, ids, cutoff=90)
             
             if ingredient_id is None:
                 unknown_names.append(name)
@@ -206,26 +210,26 @@ class AnalyzerAgent(BaseAgent):
         except Exception as e:
             print(f"Error querying ingredients: {e}")
             all_ingredients = []
+        id_to_name = {ing.id: ing.name for ing in all_ingredients}
         
         out = []
         
         for it in items:
-            d = {
-                "ingredient_name": it.ingredient_name,
-                "grams": it.grams
-            }
-            
-            if it.ingredient_id is not None:
-                d["ingredient_id"] = it.ingredient_id
-            else:
+            matched_id = it.ingredient_id
+            if matched_id is None:
                 new_id = created_ids.get(_norm(it.ingredient_name))
                 if new_id is None:
                     rec = Ingredient.query.filter(
                         func.lower(Ingredient.name) == it.ingredient_name.lower()
                     ).first()
                     new_id = rec.id if rec else None
-                d["ingredient_id"] = new_id
-            
+                matched_id = new_id
+            canonical_name = id_to_name.get(matched_id, it.ingredient_name)
+            d = {
+                "ingredient_name": canonical_name,
+                "grams": it.grams,
+                "ingredient_id": matched_id
+            }
             out.append(d)
         
         # Update state

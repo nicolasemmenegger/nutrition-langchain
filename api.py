@@ -3,7 +3,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from utils import _png_base64
 from agents.workflow import NutritionAssistant
-from models import db, Meal, MealNutrition, Ingredient
+from models import db, Meal, MealNutrition, Ingredient, ChatHistory
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -24,7 +24,7 @@ limiter = Limiter(
     default_limits=["10 per minute"]
 )
 
-@limiter.limit("1 per minute")
+@limiter.limit("30 per minute")
 @api_bp.route("/ai_chat", methods=["POST"])
 def ai_chat():
     """
@@ -95,6 +95,41 @@ def ai_chat():
             "items": [],
             "error": str(e)
         }), 500
+
+
+@api_bp.route("/chat_history", methods=["GET"])
+def get_chat_history():
+    """Return recent chat history for the current session user."""
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())
+    user_id = session['user_id']
+
+    try:
+        records = ChatHistory.get_user_history(str(user_id), limit=50)
+        # Return as a simple array of {role, content}
+        messages = [{
+            "role": rec.role,
+            "content": rec.content,
+            "category": rec.category,
+        } for rec in reversed(records)]
+        return jsonify({"messages": messages})
+    except Exception as e:
+        return jsonify({"messages": [], "error": str(e)}), 500
+
+
+@api_bp.route("/chat_history", methods=["DELETE"])
+def clear_chat_history():
+    """Clear chat history for the current session user."""
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())
+    user_id = session['user_id']
+
+    try:
+        ChatHistory.clear_user_history(str(user_id))
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @api_bp.route("/log_meal", methods=["POST"])
 def log_meal():

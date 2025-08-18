@@ -44,6 +44,9 @@ class NutritionChat {
         this.messageInput.addEventListener('input', () => {
             this.autoResize();
         });
+
+        // Load existing chat history on page load
+        this.loadHistory();
     }
     
     async sendMessage() {
@@ -78,7 +81,8 @@ class NutritionChat {
         try {
             const response = await fetch('/api/ai_chat', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                credentials: 'same-origin'
             });
             
             const data = await response.json();
@@ -116,6 +120,23 @@ class NutritionChat {
             console.error('Error:', error);
             this.hideLoading();
             this.addMessage('Sorry, there was an error processing your request. Please try again.', 'assistant');
+        }
+    }
+
+    async loadHistory() {
+        try {
+            const res = await fetch('/api/chat_history', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (Array.isArray(data.messages)) {
+                // Skip the initial welcome already rendered; append historical messages
+                data.messages.forEach((m) => {
+                    // Avoid duplicating the welcome line; only render actual saved messages
+                    this.addMessage(m.content, m.role, null, true);
+                });
+                this.scrollToBottom();
+            }
+        } catch (e) {
+            console.error('Failed to load history', e);
         }
     }
     
@@ -435,11 +456,15 @@ class NutritionChat {
     
     clearChat() {
         if (confirm('Are you sure you want to clear the chat history?')) {
-            // Keep only the welcome message
-            const messages = this.chatMessages.querySelectorAll('.message');
-            for (let i = 1; i < messages.length; i++) {
-                messages[i].remove();
-            }
+            fetch('/api/chat_history', { method: 'DELETE', credentials: 'same-origin' })
+                .then(() => {
+                    // Keep only the welcome message
+                    const messages = this.chatMessages.querySelectorAll('.message');
+                    for (let i = 1; i < messages.length; i++) {
+                        messages[i].remove();
+                    }
+                })
+                .catch((e) => console.error('Failed to clear chat', e));
         }
     }
     
