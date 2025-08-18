@@ -1,4 +1,4 @@
-from models import Ingredient, Meal, MealNutrition, db
+from models import Ingredient, Meal, MealNutrition, IngredientUsage, db
 from typing import List, Optional, Tuple
 from fuzzywuzzy import fuzz, process
 from PIL import Image
@@ -7,6 +7,8 @@ import base64
 from sqlalchemy import select
 from dataclasses import dataclass
 import re
+from datetime import date, timedelta
+import json
 
 @dataclass
 class ParsedItem:
@@ -157,3 +159,164 @@ def _fuzzy_match(name: str, names: List[str], ids: List[int], cutoff: int = 90) 
     if best_score >= cutoff:
         return ids[best_idx]
     return None
+
+
+def get_daily_nutrition_history(user_id: int, start_date: date, end_date: date):
+    """Return a list of daily totals for calories and macros between start_date and end_date (inclusive).
+
+    The result is a list of dicts sorted by date with keys: date, calories, protein, carbs, fat.
+    Missing days are filled with zeros so charts can render continuous ranges.
+    """
+    # Aggregate per-day totals from Meal + MealNutrition
+    rows = (
+        db.session.query(
+            Meal.date,
+            db.func.sum(MealNutrition.calories).label("calories"),
+            db.func.sum(MealNutrition.protein).label("protein"),
+            db.func.sum(MealNutrition.carbs).label("carbs"),
+            db.func.sum(MealNutrition.fat).label("fat"),
+        )
+        .join(MealNutrition, MealNutrition.meal_id == Meal.id)
+        .filter(
+            Meal.user_id == user_id,
+            Meal.date >= start_date,
+            Meal.date <= end_date,
+        )
+        .group_by(Meal.date)
+        .order_by(Meal.date)
+        .all()
+    )
+
+    # Map existing rows by date for quick lookup
+    totals_by_date = {r[0]: {
+        "calories": float(r[1] or 0),
+        "protein": float(r[2] or 0),
+        "carbs": float(r[3] or 0),
+        "fat": float(r[4] or 0),
+    } for r in rows}
+
+    # Fill the full range
+    results = []
+    day = start_date
+    while day <= end_date:
+        values = totals_by_date.get(day, {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0})
+        results.append({
+            "date": day.isoformat(),
+            "calories": round(values["calories"], 2),
+            "protein": round(values["protein"], 2),
+            "carbs": round(values["carbs"], 2),
+            "fat": round(values["fat"], 2),
+        })
+        day += timedelta(days=1)
+
+    return results
+
+
+def get_user_favorite_meal(user_id: int, start_date: Optional[date] = None, end_date: Optional[date] = None):
+    """Return the user's most frequently logged meal name and count.
+
+    If no meals exist, returns None. Optional date range can be provided.
+    """
+    q = (
+        db.session.query(
+            Meal.name.label("name"),
+            db.func.count(Meal.id).label("count"),
+        )
+        .filter(Meal.user_id == user_id)
+    )
+    if start_date is not None:
+        q = q.filter(Meal.date >= start_date)
+    if end_date is not None:
+        q = q.filter(Meal.date <= end_date)
+    row = q.group_by(Meal.name).order_by(db.func.count(Meal.id).desc()).first()
+    if not row:
+        return None
+    return {"name": row.name, "count": int(row.count)}
+
+
+def get_ingredient_cloud_data(user_id: int, start_date: Optional[date], end_date: Optional[date], top_n: int = 50, _allow_fallback: bool = True):
+    """Compute ingredient usage totals (grams) for a user's meals in a date range.
+
+    Returns a list of dicts: { text: ingredient_name, weight: grams } sorted by weight desc.
+    """
+    q = Meal.query.filter_by(user_id=user_id)
+    if start_date is not None:
+        q = q.filter(Meal.date >= start_date)
+    if end_date is not None:
+        q = q.filter(Meal.date <= end_date)
+    meals = q.all()
+
+    totals_by_id = {}
+    totals_by_free_name = {}
+    for meal in meals:
+        items = meal.ingredients
+        # JSON column may contain stringified JSON; normalize
+        try:
+            if isinstance(items, str):
+                items = json.loads(items)
+        except Exception:
+            items = []
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            ing_id = it.get("ingredient_id")
+            grams = float(it.get("weight") or it.get("grams") or 0) or 0.0
+            if grams <= 0:
+                continue
+            if ing_id:
+                totals_by_id[ing_id] = totals_by_id.get(ing_id, 0.0) + grams
+            else:
+                name = it.get("ingredient_name") or it.get("name")
+                if name:
+                    totals_by_free_name[name] = totals_by_free_name.get(name, 0.0) + grams
+
+    # Normalize id keys to ints for reliable lookups
+    id_totals_int = {}
+    for k, v in totals_by_id.items():
+        try:
+            ik = int(k)
+        except Exception:
+            continue
+        id_totals_int[ik] = id_totals_int.get(ik, 0.0) + float(v)
+
+    ing_ids = list(id_totals_int.keys())
+    ingredients = Ingredient.query.filter(Ingredient.id.in_(ing_ids)).all() if ing_ids else []
+    id_to_name = {ing.id: ing.name for ing in ingredients}
+
+    rows = []
+    # From id totals
+    for i, w in id_totals_int.items():
+        nm = id_to_name.get(i)
+        if nm:
+            rows.append({"text": nm, "weight": round(w, 2)})
+    # From free-name totals
+    for nm, w in totals_by_free_name.items():
+        rows.append({"text": nm, "weight": round(w, 2)})
+    rows.sort(key=lambda r: r["weight"], reverse=True)
+
+    # Fallback 1: if the requested window yields nothing, try all-time once
+    if not rows and _allow_fallback and (start_date is not None or end_date is not None):
+        return get_ingredient_cloud_data(user_id, None, None, top_n, _allow_fallback=False)
+
+    # Fallback 2: if still nothing, derive from IngredientUsage totals (lifetime)
+    if not rows:
+        usages = IngredientUsage.query.filter_by(user_id=user_id).all()
+        if usages:
+            id_to_qty = {}
+            for u in usages:
+                try:
+                    id_to_qty[int(u.ingredient_id)] = id_to_qty.get(int(u.ingredient_id), 0.0) + float(u.quantity or 0)
+                except Exception:
+                    continue
+            if id_to_qty:
+                ing_ids = list(id_to_qty.keys())
+                ingredients = Ingredient.query.filter(Ingredient.id.in_(ing_ids)).all()
+                name_by_id = {ing.id: ing.name for ing in ingredients}
+                rows = [
+                    {"text": name_by_id.get(i, str(i)), "weight": round(w, 2)}
+                    for i, w in id_to_qty.items() if name_by_id.get(i)
+                ]
+                rows.sort(key=lambda r: r["weight"], reverse=True)
+                return rows[:top_n]
+
+    return rows[:top_n]

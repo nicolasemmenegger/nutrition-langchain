@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from auth import login_required, create_user, authenticate_user
 from models import Ingredient, Meal, IngredientUsage, MealNutrition, db
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
-from utils import calculate_meal_nutrition, get_meals_for_date
+from utils import calculate_meal_nutrition, get_meals_for_date, get_daily_nutrition_history, get_user_favorite_meal, get_ingredient_cloud_data
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -110,13 +110,20 @@ def signup():
 def dashboard():
     """Main dashboard interface page"""
     if request.method == 'POST':
-        date = request.form.get('date')
-        meals_grouped = get_meals_for_date(date, session['user_id'])
-        return render_template('dashboard.html', meals=meals_grouped)
+        date_str = request.form.get('date')
+        try:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else datetime.now().date()
+        except Exception:
+            selected_date = datetime.now().date()
     else:
-        today = datetime.now().date()
-        meals_grouped = get_meals_for_date(today, session['user_id'])
-    return render_template('dashboard.html', meals=meals_grouped)
+        selected_date = datetime.now().date()
+
+    meals_grouped = get_meals_for_date(selected_date, session['user_id'])
+    start_date = selected_date - timedelta(days=29)
+    history = get_daily_nutrition_history(session['user_id'], start_date, selected_date)
+    favorite_meal = get_user_favorite_meal(session['user_id'])
+    ingredient_cloud = get_ingredient_cloud_data(session['user_id'], start_date, selected_date)
+    return render_template('dashboard.html', meals=meals_grouped, history=history, selected_date=selected_date, favorite_meal=favorite_meal, ingredient_cloud=ingredient_cloud)
 
 @limiter.limit("1 per minute")
 @views_bp.route('/add_meal', methods=['GET', 'POST'])

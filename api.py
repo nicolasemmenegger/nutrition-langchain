@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify, session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from utils import _png_base64
+from utils import _png_base64, calculate_meal_nutrition
 from agents.workflow import NutritionAssistant
-from models import db, Meal, MealNutrition, Ingredient, ChatHistory
+from models import db, Meal, MealNutrition, Ingredient, IngredientUsage, ChatHistory
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -148,35 +148,65 @@ def log_meal():
     user_id = session['user_id']
     
     try:
+        # Parse timestamp robustly
+        try:
+            ts = (timestamp or '').strip()
+            if ts.endswith('Z'):
+                ts = ts.replace('Z', '+00:00')
+            dt = datetime.fromisoformat(ts)
+        except Exception:
+            dt = datetime.utcnow()
+
+        meal_date = dt.date()
+        hour = dt.hour
+        if hour < 11:
+            meal_type = 'breakfast'
+        elif hour < 15:
+            meal_type = 'lunch'
+        elif hour < 21:
+            meal_type = 'dinner'
+        else:
+            meal_type = 'snack'
+
+        # Resolve ingredient ids and weights
+        ingredient_ids = []
+        ingredient_weights = []
+        stored_items = []
+        for item in items:
+            grams = float(item.get('grams') or 0) or 0.0
+            ing_id = item.get('ingredient_id')
+            if not ing_id and item.get('ingredient_name'):
+                ing = Ingredient.query.filter(Ingredient.name.ilike(item['ingredient_name'])).first()
+                if ing:
+                    ing_id = ing.id
+            if ing_id:
+                ingredient_ids.append(int(ing_id))
+                ingredient_weights.append(float(grams))
+                stored_items.append({"ingredient_id": int(ing_id), "weight": float(grams)})
+
+        # Determine meal name
+        meal_name = (notes or '').strip()
+        if not meal_name:
+            meal_name = (items[0].get('ingredient_name') if items else 'Meal') or 'Meal'
+        if meal_name.lower().startswith('recipe:'):
+            meal_name = meal_name.split(':', 1)[1].strip() or meal_name
+
         # Create meal record
         meal = Meal(
-            date=datetime.fromisoformat(timestamp).date(),
+            date=meal_date,
             user_id=session['user_id'],
-            name=notes or 'Meal',
-            ingredients=json.dumps(items),
-            meal_type='meal'  # TODO: Determine meal type based on time
+            name=meal_name,
+            ingredients=json.dumps(stored_items or items),
+            meal_type=meal_type
         )
         db.session.add(meal)
         db.session.flush()
-        
-        # Calculate nutrition totals
-        total_calories = 0
-        total_protein = 0
-        total_carbs = 0
-        total_fat = 0
-        
-        for item in items:
-            if item.get('ingredient_id'):
-                ingredient = Ingredient.query.get(item['ingredient_id'])
-                if ingredient:
-                    # Calculate nutrition based on grams
-                    factor = item['grams'] / 100.0  # Ingredients are per 100g
-                    total_calories += ingredient.calories * factor
-                    total_protein += ingredient.protein * factor
-                    total_carbs += ingredient.carbs * factor
-                    total_fat += ingredient.fat * factor
-        
-        # Create nutrition record
+
+        # Compute nutrition totals using the same util as manual entry
+        total_calories, total_protein, total_carbs, total_fat = 0.0, 0.0, 0.0, 0.0
+        if ingredient_ids and ingredient_weights:
+            total_calories, total_protein, total_carbs, total_fat = calculate_meal_nutrition(ingredient_ids, ingredient_weights)
+
         nutrition = MealNutrition(
             meal_id=meal.id,
             calories=total_calories,
@@ -185,11 +215,22 @@ def log_meal():
             fat=total_fat
         )
         db.session.add(nutrition)
+
+        # Track ingredient usage
+        for ing_id, grams in zip(ingredient_ids, ingredient_weights):
+            usage = IngredientUsage.query.filter_by(ingredient_id=ing_id, user_id=session['user_id']).first()
+            if usage:
+                usage.quantity += grams
+            else:
+                db.session.add(IngredientUsage(ingredient_id=ing_id, user_id=session['user_id'], quantity=grams))
+
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
             "meal_id": meal.id,
+            "meal_type": meal_type,
+            "meal_name": meal_name,
             "nutrition": {
                 "calories": round(total_calories, 1),
                 "protein": round(total_protein, 1),
