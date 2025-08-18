@@ -127,21 +127,29 @@ def create_nutrition_workflow(openai_api_key: str = None):
             }
             return state
     
+    # Define in_conversation node - just passes through to END for now
+    def in_conversation(state: State) -> State:
+        """Node for conversation state - response already set by coordinator"""
+        # The coordinator has already set the response
+        # This node just marks we're in conversation mode
+        return state
+    
     # Add nodes to the graph
     workflow.add_node("coordinator", coordinate)
     workflow.add_node("analyze_meal", analyze_meal)
     workflow.add_node("web_search", search_web)
     workflow.add_node("recipe_generation", generate_recipe)
     workflow.add_node("coaching", provide_coaching)
+    workflow.add_node("in_conversation", in_conversation)
     
     # Define routing logic
-    def route_after_coordinator(state: State) -> Literal["analyze_meal", "web_search", "recipe_generation", "coaching", END]:
+    def route_after_coordinator(state: State) -> Literal["analyze_meal", "web_search", "recipe_generation", "coaching", "in_conversation", END]:
         """Route based on category from coordinator"""
         category = state.get("category", "conversation")
         
-        # If it's conversation or clarification, end here (don't route to other agents)
+        # If it's conversation or clarification, stay in conversation mode
         if category in ["conversation", "clarification"]:
-            return END
+            return "in_conversation"
         elif category == "web_search":
             return "web_search"
         elif category == "recipe_generation":
@@ -163,6 +171,7 @@ def create_nutrition_workflow(openai_api_key: str = None):
             "web_search": "web_search",
             "recipe_generation": "recipe_generation",
             "coaching": "coaching",
+            "in_conversation": "in_conversation",
             END: END
         }
     )
@@ -172,6 +181,9 @@ def create_nutrition_workflow(openai_api_key: str = None):
     workflow.add_edge("web_search", END)
     workflow.add_edge("recipe_generation", END)
     workflow.add_edge("coaching", END)
+    
+    # In conversation also leads to END (ready for next user input)
+    workflow.add_edge("in_conversation", END)
     
     # Compile the graph
     return workflow.compile()

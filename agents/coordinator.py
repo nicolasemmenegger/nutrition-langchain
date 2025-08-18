@@ -44,6 +44,11 @@ class CoordinatorAgent(BaseAgent):
                 - conversation: General chat, greetings, or off-topic
                 - clarification: User's intent is clear but needs more details (e.g., "I had breakfast" without specifics)
                 
+                IMPORTANT: Look at the conversation history. If you previously asked for clarification about something:
+                - If the user provides the requested details, classify based on the original intent + new details
+                - For example: If you asked "What did you have for breakfast?" and they say "eggs and toast", classify as analyze_meal
+                - If you asked "What kind of recipe?" and they say "pasta", classify as recipe_generation
+                
                 Recent conversation:
                 {history_context}
                 
@@ -148,7 +153,7 @@ class CoordinatorAgent(BaseAgent):
         )
         self.save_chat_message(user_id, user_message)
         
-        # If it's conversation or clarification, handle it directly without routing
+        # If it's   or clarification, handle it directly without routing
         if category in ["conversation", "clarification"]:
             state["category"] = category
             state["response"] = {
@@ -156,11 +161,23 @@ class CoordinatorAgent(BaseAgent):
                 "items": []
             }
             
-            # Save coordinator's response to history
+            # Save coordinator's response to history with intent tracking
+            metadata = {"type": category}
+            
+            # If asking for clarification, store what we're clarifying about
+            if category == "clarification":
+                # Try to determine the underlying intent from the response
+                if "breakfast" in user_input.lower() or "lunch" in user_input.lower() or "dinner" in user_input.lower() or "ate" in user_input.lower() or "had" in user_input.lower():
+                    metadata["clarifying_about"] = "meal_logging"
+                elif "recipe" in user_input.lower() or "cook" in user_input.lower() or "make" in user_input.lower():
+                    metadata["clarifying_about"] = "recipe"
+                elif "advice" in user_input.lower() or "healthy" in user_input.lower() or "diet" in user_input.lower():
+                    metadata["clarifying_about"] = "coaching"
+            
             assistant_message = ChatMessage(
                 role="assistant",
                 content=coordinator_response,
-                metadata={"type": category}
+                metadata=metadata
             )
             self.save_chat_message(user_id, assistant_message)
         else:
