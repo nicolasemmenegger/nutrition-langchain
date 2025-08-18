@@ -195,14 +195,6 @@ class RecipeGenerationAgent(BaseAgent):
                         "grams": ing["grams"]
                     })
         
-        # Save to chat history
-        assistant_message = ChatMessage(
-            role="assistant",
-            content=response_html,
-            metadata={"recipe": recipe}
-        )
-        self.save_chat_message(user_id, assistant_message)
-        
         # Update state
         state["response"] = {
             "reply_html": response_html,

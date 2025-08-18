@@ -137,14 +137,6 @@ class WebSearchAgent(BaseAgent):
                 "nutrition": nutrition_data.get("per_100g")
             })
         
-        # Save to chat history
-        assistant_message = ChatMessage(
-            role="assistant",
-            content=response_html,
-            metadata={"nutrition_data": nutrition_data}
-        )
-        self.save_chat_message(user_id, assistant_message)
-        
         # Update state
         state["response"] = {
             "reply_html": response_html,

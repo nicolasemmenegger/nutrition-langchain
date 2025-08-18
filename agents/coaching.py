@@ -233,18 +233,6 @@ class CoachingAgent(BaseAgent):
         # Format response
         response_html = self.format_coaching_response(advice, nutritional_history)
         
-        # Save to chat history
-        assistant_message = ChatMessage(
-            role="assistant",
-            content=response_html,
-            metadata={
-                "type": "coaching",
-                "advice": advice,
-                "history_analysis": nutritional_history
-            }
-        )
-        self.save_chat_message(user_id, assistant_message)
-        
         # Update state
         state["response"] = {
             "reply_html": response_html,

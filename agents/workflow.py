@@ -56,15 +56,20 @@ def create_nutrition_workflow(openai_api_key: str = None):
             if state.get("response"):
                 combined = coordinator_response + follow_up
                 state["response"]["reply_html"] = combined
-                # Persist the combined response so the next turn has full assistant context
+                # Persist the final combined assistant reply exactly once
                 try:
                     from .base import ChatMessage
                     coordinator.save_chat_message(
                         state.get("user_id", "default"),
-                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                        ChatMessage(
+                            role="assistant",
+                            content=combined,
+                            metadata={"type": "analyze_meal", "items": state["response"].get("items", [])},
+                            category="analyze_meal"
+                        )
                     )
                 except Exception as e:
-                    print(f"Failed saving combined follow-up: {e}")
+                    print(f"Failed saving final combined reply (analyze_meal): {e}")
             
             return state
         except Exception as e:
@@ -87,15 +92,20 @@ def create_nutrition_workflow(openai_api_key: str = None):
             if state.get("response"):
                 combined = coordinator_response + follow_up
                 state["response"]["reply_html"] = combined
-                # Persist the combined response for continuity
+                # Persist the final combined assistant reply exactly once
                 try:
                     from .base import ChatMessage
                     coordinator.save_chat_message(
                         state.get("user_id", "default"),
-                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                        ChatMessage(
+                            role="assistant",
+                            content=combined,
+                            metadata={"type": "web_search", "nutrition_data": state["response"].get("nutrition_data")},
+                            category="web_search"
+                        )
                     )
                 except Exception as e:
-                    print(f"Failed saving combined follow-up (web_search): {e}")
+                    print(f"Failed saving final combined reply (web_search): {e}")
             
             return state
         except Exception as e:
@@ -118,15 +128,20 @@ def create_nutrition_workflow(openai_api_key: str = None):
             if state.get("response"):
                 combined = coordinator_response + follow_up
                 state["response"]["reply_html"] = combined
-                # Persist the combined response for continuity
+                # Persist the final combined assistant reply exactly once
                 try:
                     from .base import ChatMessage
                     coordinator.save_chat_message(
                         state.get("user_id", "default"),
-                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                        ChatMessage(
+                            role="assistant",
+                            content=combined,
+                            metadata={"type": "recipe_generation", "recipe": state["response"].get("recipe")},
+                            category="recipe_generation"
+                        )
                     )
                 except Exception as e:
-                    print(f"Failed saving combined follow-up (recipe): {e}")
+                    print(f"Failed saving final combined reply (recipe_generation): {e}")
             
             return state
         except Exception as e:
@@ -148,15 +163,20 @@ def create_nutrition_workflow(openai_api_key: str = None):
             if state.get("response"):
                 combined = coordinator_response + state["response"]["reply_html"]
                 state["response"]["reply_html"] = combined
-                # Persist the combined response for continuity
+                # Persist the final combined assistant reply exactly once
                 try:
                     from .base import ChatMessage
                     coordinator.save_chat_message(
                         state.get("user_id", "default"),
-                        ChatMessage(role="assistant", content=combined, metadata={"type": "coordinator_follow_up"})
+                        ChatMessage(
+                            role="assistant",
+                            content=combined,
+                            metadata={"type": "coaching", "coaching_data": state["response"].get("coaching_data", {})},
+                            category="coaching"
+                        )
                     )
                 except Exception as e:
-                    print(f"Failed saving combined follow-up (coaching): {e}")
+                    print(f"Failed saving final combined reply (coaching): {e}")
             
             return state
         except Exception as e:

@@ -28,7 +28,7 @@ class BaseAgent(ABC):
         """Process the state and return updated state"""
         pass
     
-    def get_chat_history(self, user_id: str, limit: int = 10) -> List[ChatMessage]:
+    def get_chat_history(self, user_id: str, limit: int = 50) -> List[ChatMessage]:
         """Retrieve chat history from database"""
         try:
             # Import here to avoid circular imports

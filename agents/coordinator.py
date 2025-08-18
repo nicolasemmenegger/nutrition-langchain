@@ -25,10 +25,14 @@ class CoordinatorAgent(BaseAgent):
         history_messages = []
         if chat_history:
             # Use the most recent few messages to preserve context
-            for msg in chat_history[-6:]:
+            import re
+            tag_re = re.compile(r"<[^>]+>")
+            for msg in chat_history[-8:]:
+                # Strip HTML tags to reduce noise for the classifier
+                cleaned = tag_re.sub("", (msg.content or ""))[:1000]
                 history_messages.append({
                     "role": msg.role,
-                    "content": msg.content[:1000]
+                    "content": cleaned
                 })
 
         messages = [
@@ -144,17 +148,13 @@ class CoordinatorAgent(BaseAgent):
         user_message = ChatMessage(
             role="user",
             content=user_input,
-            metadata={"category": category}
+            metadata={"category": category},
+            category=category
         )
         self.save_chat_message(user_id, user_message)
         
-        # Always save the coordinator's response to ensure continuity across agent calls
-        coordinator_message = ChatMessage(
-            role="assistant",
-            content=coordinator_response,
-            metadata={"type": "coordinator", "category": category}
-        )
-        self.save_chat_message(user_id, coordinator_message)
+        # Prepare metadata for coordinator response (single save, no duplicates)
+        coordinator_metadata = {"type": "coordinator", "category": category}
         
         # If it's conversation or clarification, handle it directly without routing
         if category in ["conversation", "clarification"]:
@@ -164,25 +164,26 @@ class CoordinatorAgent(BaseAgent):
                 "items": []
             }
             
-            # Save coordinator's response to history with intent tracking
-            metadata = {"type": category}
-            
             # If asking for clarification, store what we're clarifying about
             if category == "clarification":
-                # Try to determine the underlying intent from the response
-                if "breakfast" in user_input.lower() or "lunch" in user_input.lower() or "dinner" in user_input.lower() or "ate" in user_input.lower() or "had" in user_input.lower():
-                    metadata["clarifying_about"] = "meal_logging"
-                elif "recipe" in user_input.lower() or "cook" in user_input.lower() or "make" in user_input.lower():
-                    metadata["clarifying_about"] = "recipe"
-                elif "advice" in user_input.lower() or "healthy" in user_input.lower() or "diet" in user_input.lower():
-                    metadata["clarifying_about"] = "coaching"
-            
-            assistant_message = ChatMessage(
+                if any(k in user_input.lower() for k in ["breakfast", "lunch", "dinner", "ate", "had"]):
+                    coordinator_metadata["clarifying_about"] = "meal_logging"
+                elif any(k in user_input.lower() for k in ["recipe", "cook", "make"]):
+                    coordinator_metadata["clarifying_about"] = "recipe"
+                elif any(k in user_input.lower() for k in ["advice", "healthy", "diet"]):
+                    coordinator_metadata["clarifying_about"] = "coaching"
+
+            # Save the coordinator's response once with enriched metadata
+            coordinator_message = ChatMessage(
                 role="assistant",
                 content=coordinator_response,
-                metadata=metadata
+                metadata=coordinator_metadata,
+                category=category
             )
-            self.save_chat_message(user_id, assistant_message)
+            self.save_chat_message(user_id, coordinator_message)
+
+            # Refresh chat history for completeness
+            state["chat_history"] = self.get_chat_history(user_id)
         else:
             # For other categories, store the coordinator's initial response
             state["category"] = category

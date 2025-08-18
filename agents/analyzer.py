@@ -228,14 +228,6 @@ class AnalyzerAgent(BaseAgent):
             
             out.append(d)
         
-        # Save assistant response to history
-        assistant_message = ChatMessage(
-            role="assistant",
-            content=assistant_html,
-            metadata={"items": out}
-        )
-        self.save_chat_message(user_id, assistant_message)
-        
         # Update state
         response_data = {
             "reply_html": assistant_html,
