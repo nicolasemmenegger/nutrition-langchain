@@ -1,11 +1,24 @@
-  <nav class="flex items-center justify-between w-full p-4 fixed top-0 left-0 right-0 bg-white shadow-md z-50">
-    <h1 class="text-2xl font-bold text-primary"><a href="{{ url_for('views.dashboard') }}">🥬 Lettuce</a></h1>
-    <div class="flex flex-row items-center justify-center gap-4">
-      <a href="{{ url_for('views.add_meal') }}" class="text-sm text-primary">
-        Add Meal
-      </a>
-      <a href="{{ url_for('views.logout') }}" class="text-sm text-primary">
-          Logout
-      </a>
-    </div>
-  </nav>
+<nav class="navbar">
+  <div class="navbar-container">
+      <h1 class="navbar-brand">
+          <a href="{{ url_for('views.chat') }}">
+              <i class="fas fa-leaf"></i> Lettuce
+          </a>
+      </h1>
+      <div class="navbar-menu">
+          <a href="{{ url_for('views.chat') }}" class="navbar-item {% if request.path == url_for('views.chat') %}active{% endif %}">
+              <i class="fas fa-comments"></i> Chat
+          </a>
+          <a href="{{ url_for('views.dashboard') }}" class="navbar-item {% if request.path == url_for('views.dashboard') %}active{% endif %}">
+              <i class="fas fa-calendar-alt"></i> Calendar
+          </a>
+          <div class="navbar-divider"></div>
+          <span class="navbar-user">
+              <i class="fas fa-user"></i> {{ session.get('username', 'User') }}
+          </span>
+          <a href="{{ url_for('views.logout') }}" class="navbar-item navbar-logout">
+              <i class="fas fa-sign-out-alt"></i> Logout
+          </a>
+      </div>
+  </div>
+</nav>
