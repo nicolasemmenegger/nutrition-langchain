@@ -2,6 +2,8 @@ from typing import Dict, Any, Literal, Tuple
 from openai import OpenAI
 from .base import BaseAgent, ChatMessage
 import json
+import os
+from datetime import datetime
 
 class CoordinatorAgent(BaseAgent):
     """Coordinator agent that manages conversation flow and routes to appropriate agents"""
@@ -14,6 +16,7 @@ class CoordinatorAgent(BaseAgent):
     
     def classify_and_respond(self, user_input: str, chat_history: list[ChatMessage] = None, has_image: bool = False) -> Tuple[str, str]:
         """Classify request and generate appropriate conversational response"""
+
         
         # If there's an image, always analyze it immediately
         if has_image:
@@ -77,11 +80,20 @@ class CoordinatorAgent(BaseAgent):
                 - You should keep responses fairly short, and not provide too many pointers at once. Focus on what seems most important.
                 - Talk like a human. Don't include titles or subtitles. Just output some text, as I would when I text a friend.
             """}
-        ] + history_messages + [
+        ] + list(reversed(history_messages)) + [
             {"role": "user", "content": user_input}
         ]
         
         try:
+
+            # Log the request to a timestamped file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_filename = f"logs/coordinator_{timestamp}.log"
+            os.makedirs("logs", exist_ok=True)
+            with open(log_filename, 'w') as f:
+                f.write(json.dumps(messages, indent=2))
+
+
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=messages,
