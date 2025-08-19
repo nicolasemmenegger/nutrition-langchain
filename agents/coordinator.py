@@ -46,27 +46,29 @@ class CoordinatorAgent(BaseAgent):
             {"role": "system", "content": """
                 You are a request classifier for a nutrition assistant. Your job is to:
                 1. Classify the user's request into the appropriate category
-                2. Determine if the request is specific enough to delegate to a specialized agent
+                2. Determine if the request is specific enough to delegate to the meal analyzer agent
                 
                 Categories:
                 - analyze_meal: User wants to log specific food items with quantities (e.g., "I had 2 eggs and toast", "150g of chicken breast")
-                - web_search: User mentions specific branded/restaurant food items that need lookup
-                - coaching: User wants specific dietary advice or meal balance suggestions
-                - recipe_generation: User wants a specific recipe suggestion
+                - recipe_generation: User wants a recipe suggestion. (e.g "What should I eat today?)
+                - coaching: User wants some general advice (e.g. "How could I improve my diet")
                 - conversation: General chat, greetings, or requests that need clarification
                 
                 A request is SPECIFIC ENOUGH when:
                 - For analyze_meal: Food items AND quantities are mentioned (e.g., "2 eggs", "a bowl of rice", "150g chicken")
-                - For recipe_generation: A clear type of dish or cuisine is mentioned (e.g., "pasta recipe", "healthy breakfast", "Thai curry")
-                - For web_search: A specific brand or restaurant item is mentioned (e.g., "McDonald's Big Mac", "Starbucks latte")
-                - For coaching: A specific nutrition question or goal is stated (e.g., "how to increase protein", "is this meal balanced")
+                - For recipe_generation: Always!
                 
-                A request needs CONVERSATION when:
-                - It's too vague (e.g., "I had breakfast", "I want something healthy", "help me eat better")
-                - Missing critical details (e.g., "just eggs" without quantity, "a recipe" without type)
+                A request that needs CONVERSATION when:
                 - It's a greeting or general chat
+                - If it suggests that the user wants to log a meal but
+                    a) It's too vague (e.g., "I had breakfast") or
+                    b) It's missing critical details (e.g., "just eggs" without quantity, "a recipe" without type). 
+                  However, if the user refuses to give any clarifications you should defer to the appropriate agent and let it formulate a best guess
                 
-                Look at the conversation history to understand context. If the user is providing details in response to a previous question, consider the full context.
+                Additional pointers:
+                - Look at the conversation history to understand context. 
+                - If the user is providing details in response to a previous question, consider the full context. 
+                - Also consider the assistant responses from the specialized agents. They are identified using their name field.
                 
                 Return a JSON object with:
                 {
