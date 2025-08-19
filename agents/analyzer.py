@@ -2,6 +2,8 @@ from typing import Dict, Any, List
 from openai import OpenAI
 from .base import BaseAgent, ChatMessage
 import json
+import os
+from datetime import datetime
 from utils import _png_base64, _load_ingredient_index, _fuzzy_match, ParsedItem, _norm
 from prompts import STRUCTURE_SPEC, NUTRITION_CARD_SPEC
 from models import Ingredient, db
@@ -34,6 +36,31 @@ class AnalyzerAgent(BaseAgent):
         ]
         
         try:
+            # Log the request to a timestamped file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_filename = f"logs/analyzer_{timestamp}.log"
+            os.makedirs("logs", exist_ok=True)
+            with open(log_filename, 'w') as f:
+                # Create a serializable version of messages
+                log_messages = []
+                for msg in messages:
+                    log_msg = {"role": msg["role"]}
+                    if msg["role"] == "system":
+                        log_msg["content"] = [
+                            {"type": c["type"], "text": c["text"]} 
+                            for c in msg["content"]
+                        ]
+                    else:
+                        log_content = []
+                        for c in msg["content"]:
+                            if c["type"] == "text":
+                                log_content.append({"type": "text", "text": c["text"]})
+                            elif c["type"] == "image_url":
+                                log_content.append({"type": "image_url", "url": "IMAGE_DATA_OMITTED"})
+                        log_msg["content"] = log_content
+                    log_messages.append(log_msg)
+                f.write(json.dumps(log_messages, indent=2))
+
             resp = self.client.chat.completions.create(
                 model=self.parser_model,
                 messages=messages,

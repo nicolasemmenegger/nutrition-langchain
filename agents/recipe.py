@@ -2,6 +2,8 @@ from typing import Dict, Any, List
 from openai import OpenAI
 from .base import BaseAgent, ChatMessage
 import json
+import os
+from datetime import datetime
 
 class RecipeGenerationAgent(BaseAgent):
     """Agent for generating healthy recipe suggestions"""
@@ -92,6 +94,13 @@ class RecipeGenerationAgent(BaseAgent):
         ]
         
         try:
+            # Log the request to a timestamped file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_filename = f"logs/recipe_generation_{timestamp}.log"
+            os.makedirs("logs", exist_ok=True)
+            with open(log_filename, 'w') as f:
+                f.write(json.dumps(messages, indent=2))
+
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=messages,
