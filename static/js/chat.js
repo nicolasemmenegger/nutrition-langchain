@@ -44,6 +44,14 @@ class NutritionChat {
         this.messageInput.addEventListener('input', () => {
             this.autoResize();
         });
+        
+        // Handle Enter key (send) vs Shift+Enter (new line)
+        this.messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
+            }
+        });
 
         // Load existing chat history on page load
         this.loadHistory();
@@ -242,9 +250,6 @@ class NutritionChat {
             <button class="btn-primary" onclick="nutritionChat.confirmMeal()">
                 <i class="fas fa-check"></i> Log Meal
             </button>
-            <button class="btn-secondary" onclick="nutritionChat.closePanel()">
-                Cancel
-            </button>
         `;
         
         // Update panel title
@@ -324,9 +329,6 @@ class NutritionChat {
             </button>
             <button class="btn-secondary" onclick="nutritionChat.saveRecipe()">
                 <i class="fas fa-bookmark"></i> Save Recipe
-            </button>
-            <button class="btn-secondary" onclick="nutritionChat.closePanel()">
-                Close
             </button>
         `;
         
@@ -484,7 +486,14 @@ class NutritionChat {
     }
     
     showLoading() {
-        this.addMessage("Thinking ...", 'assistant', null, true);
+        const loadingHTML = `
+            <div class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        `;
+        this.addMessage(loadingHTML, 'assistant', null, true);
     }
     
     hideLoading() {
@@ -497,8 +506,11 @@ class NutritionChat {
     }
     
     autoResize() {
+        // Reset height to auto to get correct scrollHeight
         this.messageInput.style.height = 'auto';
-        this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 120) + 'px';
+        // Set new height based on content, max 120px
+        const newHeight = Math.min(this.messageInput.scrollHeight, 120);
+        this.messageInput.style.height = newHeight + 'px';
     }
 }
 
