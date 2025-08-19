@@ -26,6 +26,15 @@ class NutritionChat {
             this.handleImageSelect(e);
         });
         
+        // Microphone handling
+        this.micButton = document.getElementById('micButton');
+        if (this.micButton) {
+            this.micButton.addEventListener('click', () => this.toggleRecording());
+        }
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.isRecording = false;
+
         document.getElementById('removeImage').addEventListener('click', () => {
             this.clearImage();
         });
@@ -55,6 +64,64 @@ class NutritionChat {
 
         // Load existing chat history on page load
         this.loadHistory();
+    }
+    async toggleRecording() {
+        try {
+            if (!this.isRecording) {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert('Microphone not supported in this browser');
+                    return;
+                }
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+                this.mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+                this.audioChunks = [];
+                this.mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) this.audioChunks.push(e.data);
+                };
+                this.mediaRecorder.onstop = async () => {
+                    const blob = new Blob(this.audioChunks, { type: mime });
+                    await this.sendAudioForTranscription(blob);
+                    stream.getTracks().forEach(t => t.stop());
+                };
+                this.mediaRecorder.start();
+                this.isRecording = true;
+                this.setMicActive(true);
+            } else {
+                this.mediaRecorder.stop();
+                this.isRecording = false;
+                this.setMicActive(false);
+            }
+        } catch (e) {
+            console.error('Recording error', e);
+            this.isRecording = false;
+            this.setMicActive(false);
+        }
+    }
+
+    setMicActive(active) {
+        try {
+            this.micButton.classList.toggle('active', !!active);
+            this.micButton.innerHTML = active ? '<i class="fas fa-stop"></i>' : '<i class="fas fa-microphone"></i>';
+        } catch {}
+    }
+
+    async sendAudioForTranscription(blob) {
+        try {
+            const fd = new FormData();
+            fd.append('audio', blob, 'voice.webm');
+            const resp = await fetch('/api/transcribe_audio', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (data && data.text) {
+                // Place the transcribed text into the message input and send
+                this.messageInput.value = data.text;
+                this.sendMessage();
+            } else {
+                console.warn('No transcription text returned', data);
+            }
+        } catch (e) {
+            console.error('Transcription error', e);
+        }
     }
     
     async sendMessage() {

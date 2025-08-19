@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import os
 import uuid
 import json
+import io
 
 load_dotenv()
 
@@ -284,6 +285,41 @@ def log_meal():
             "success": False,
             "error": str(e)
         }), 500
+@api_bp.route('/transcribe_audio', methods=['POST'])
+def transcribe_audio():
+    """
+    Accepts: multipart/form-data with field 'audio' (audio/webm or audio/ogg)
+    Uses OpenAI GPT-4o-mini Transcribe to produce text.
+    Returns: { text }
+    """
+    try:
+        file = request.files.get('audio')
+        if not file:
+            return jsonify({"error": "No audio file provided"}), 400
+
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv('OPENAI_API_KEY_COMMON_EXPERIENCE') or os.getenv('OPENAI_API_KEY'))
+
+        # Read file content into memory
+        audio_bytes = file.read()
+        file.seek(0)
+
+        # Create a transient upload for transcription
+        # Using the unified audio.transcriptions.create with model 'gpt-4o-mini-transcribe'
+        result = client.audio.transcriptions.create(
+            model="gpt-4o-mini-transcribe",
+            file=(file.filename or "audio.webm", io.BytesIO(audio_bytes))
+        )
+
+        text = result.text if hasattr(result, 'text') else (result.get('text') if isinstance(result, dict) else None)
+        if not text:
+            # Some SDKs return {text: ...} directly
+            text = getattr(result, 'text', None) or ''
+
+        return jsonify({"text": text or ""})
+    except Exception as e:
+        print("transcribe_audio error:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 
 @api_bp.route("/compute_nutrition", methods=["POST"])
