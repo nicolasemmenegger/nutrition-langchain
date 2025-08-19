@@ -132,28 +132,44 @@ def add_meal():
     if request.method == 'POST':
         date = datetime.strptime(request.form.get('date'), '%Y-%m-%d').date()
         name = request.form.get('name')
-        ingredients = request.form.getlist('ingredient_name[]')
-        ingredient_weights = request.form.getlist('ingredient_weight[]')
+        raw_ingredients = request.form.getlist('ingredient_name[]')
+        raw_weights = request.form.getlist('ingredient_weight[]')
 
-        for ingredient in ingredients:
-            ingredient_usage = IngredientUsage.query.filter_by(ingredient_id=ingredient, user_id=session['user_id']).first()
-            if ingredient_usage:
-                ingredient_usage.quantity += float(ingredient_weights[ingredients.index(ingredient)])
-                db.session.commit()
+        # Normalize ids and weights
+        ingredient_ids = []
+        ingredient_weights = []
+        for ing, wt in zip(raw_ingredients, raw_weights):
+            try:
+                ingredient_ids.append(int(ing))
+            except Exception:
+                continue
+            try:
+                ingredient_weights.append(float(wt))
+            except Exception:
+                ingredient_weights.append(0.0)
+
+        # Update ingredient usage (single commit later)
+        for ing_id, grams in zip(ingredient_ids, ingredient_weights):
+            usage = IngredientUsage.query.filter_by(ingredient_id=ing_id, user_id=session['user_id']).first()
+            if usage:
+                usage.quantity += float(grams)
             else:
-                ingredient_usage = IngredientUsage(ingredient_id=ingredient, user_id=session['user_id'], quantity=float(ingredient_weights[ingredients.index(ingredient)]))
-                db.session.add(ingredient_usage)
+                db.session.add(IngredientUsage(ingredient_id=ing_id, user_id=session['user_id'], quantity=float(grams)))
 
         meal_type = request.form.get('meal_type')
         ingredients_list = []
-        for ingredient, weight in zip(ingredients, ingredient_weights):
-            ingredients_list.append({'ingredient_id': ingredient, 'weight': weight})
-        meal = Meal(name=name, ingredients=json.dumps(ingredients_list), meal_type=meal_type, user_id=session['user_id'], date=date)
+        for ing_id, grams in zip(ingredient_ids, ingredient_weights):
+            ingredients_list.append({'ingredient_id': int(ing_id), 'weight': float(grams)})
+
+        # Store structured JSON, not stringified JSON
+        meal = Meal(name=name, ingredients=ingredients_list, meal_type=meal_type, user_id=session['user_id'], date=date)
         db.session.add(meal)
-        db.session.commit()
-        calories, protein, carbs, fat = calculate_meal_nutrition(ingredients, ingredient_weights)
+        db.session.flush()
+
+        calories, protein, carbs, fat = calculate_meal_nutrition(ingredient_ids, ingredient_weights)
         meal_nutrition = MealNutrition(meal_id=meal.id, calories=calories, protein=protein, carbs=carbs, fat=fat)
         db.session.add(meal_nutrition)
+
         db.session.commit()
         print(f"Adding meal: {meal}")
         

@@ -157,10 +157,13 @@ def log_meal():
     notes = data.get('notes', '')
     timestamp = data.get('timestamp', datetime.utcnow().isoformat())
     
-    # Get user session ID
+    # Require an authenticated user (session user_id must be an integer)
     if 'user_id' not in session:
-        session['user_id'] = str(uuid.uuid4())
-    user_id = session['user_id']
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    try:
+        user_id = int(session['user_id'])
+    except Exception:
+        return jsonify({"success": False, "error": "Invalid session user"}), 401
     
     try:
         # Parse timestamp robustly
@@ -209,9 +212,9 @@ def log_meal():
         # Create meal record
         meal = Meal(
             date=meal_date,
-            user_id=session['user_id'],
+            user_id=user_id,
             name=meal_name,
-            ingredients=json.dumps(stored_items or items),
+            ingredients=(stored_items or items),
             meal_type=meal_type
         )
         db.session.add(meal)
@@ -221,6 +224,20 @@ def log_meal():
         total_calories, total_protein, total_carbs, total_fat = 0.0, 0.0, 0.0, 0.0
         if ingredient_ids and ingredient_weights:
             total_calories, total_protein, total_carbs, total_fat = calculate_meal_nutrition(ingredient_ids, ingredient_weights)
+        else:
+            # Fallback: if items include per_100g nutrition, compute from that
+            for it in items:
+                grams = float(it.get('grams') or 0) or 0.0
+                n = it.get('nutrition') or it.get('per_100g')
+                if not n or grams <= 0:
+                    continue
+                try:
+                    total_calories += float(n.get('calories') or 0) * grams / 100.0
+                    total_protein += float(n.get('protein') or 0) * grams / 100.0
+                    total_carbs += float(n.get('carbs') or 0) * grams / 100.0
+                    total_fat += float(n.get('fat') or 0) * grams / 100.0
+                except Exception:
+                    continue
 
         nutrition = MealNutrition(
             meal_id=meal.id,
@@ -233,11 +250,11 @@ def log_meal():
 
         # Track ingredient usage
         for ing_id, grams in zip(ingredient_ids, ingredient_weights):
-            usage = IngredientUsage.query.filter_by(ingredient_id=ing_id, user_id=session['user_id']).first()
+            usage = IngredientUsage.query.filter_by(ingredient_id=ing_id, user_id=user_id).first()
             if usage:
                 usage.quantity += grams
             else:
-                db.session.add(IngredientUsage(ingredient_id=ing_id, user_id=session['user_id'], quantity=grams))
+                db.session.add(IngredientUsage(ingredient_id=ing_id, user_id=user_id, quantity=grams))
 
         db.session.commit()
 
@@ -261,3 +278,48 @@ def log_meal():
             "success": False,
             "error": str(e)
         }), 500
+
+
+@api_bp.route("/compute_nutrition", methods=["POST"])
+def compute_nutrition():
+    """
+    Compute aggregated nutrition for a list of items.
+    Accepts JSON: { items: [{ingredient_id?|ingredient_name?, grams}] }
+    Returns: { calories, protein, carbs, fat, resolved: n }
+    """
+    try:
+        data = request.json or {}
+        items = data.get("items", [])
+        if not isinstance(items, list):
+            return jsonify({"error": "items must be a list"}), 400
+
+        ingredient_ids = []
+        ingredient_weights = []
+
+        for item in items:
+            grams = float(item.get("grams") or 0) or 0.0
+            if grams <= 0:
+                continue
+            ing_id = item.get("ingredient_id")
+            if not ing_id and item.get("ingredient_name"):
+                ing = Ingredient.query.filter(Ingredient.name.ilike(item["ingredient_name"])).first()
+                if ing:
+                    ing_id = ing.id
+            if ing_id:
+                ingredient_ids.append(int(ing_id))
+                ingredient_weights.append(float(grams))
+
+        calories, protein, carbs, fat = 0.0, 0.0, 0.0, 0.0
+        if ingredient_ids and ingredient_weights:
+            calories, protein, carbs, fat = calculate_meal_nutrition(ingredient_ids, ingredient_weights)
+
+        return jsonify({
+            "calories": round(calories, 2),
+            "protein": round(protein, 2),
+            "carbs": round(carbs, 2),
+            "fat": round(fat, 2),
+            "resolved": len(ingredient_ids)
+        })
+    except Exception as e:
+        print("compute_nutrition error:", str(e))
+        return jsonify({"error": str(e)}), 500

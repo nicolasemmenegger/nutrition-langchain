@@ -63,7 +63,7 @@ class IngredientUsage(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     def __repr__(self):
-        return f'<IngredientUsage {self.ingredient_id} {self.meal_id} {self.quantity}>'
+        return f'<IngredientUsage ingredient_id={self.ingredient_id} user_id={self.user_id} qty={self.quantity}>'
 
 class ChatHistory(db.Model):
     """Model for storing chat history"""

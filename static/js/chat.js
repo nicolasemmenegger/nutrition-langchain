@@ -212,33 +212,29 @@ class NutritionChat {
         
         // Populate ingredients
         const ingredientsList = document.getElementById('ingredientsList');
-        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0;
-        
         data.items.forEach((item, index) => {
             const ingredientDiv = document.createElement('div');
             ingredientDiv.className = 'ingredient-item';
+            // Keep original mapping to preserve ids when name unchanged
+            if (item.ingredient_id != null) ingredientDiv.dataset.ingredientId = String(item.ingredient_id);
+            if (item.ingredient_name != null) ingredientDiv.dataset.originalName = String(item.ingredient_name);
             ingredientDiv.innerHTML = `
                 <div class="ingredient-info">
                     <input type="text" 
-                           id="ingredient-name-${index}" 
-                           value="${item.ingredient_name}" 
+                           value="${item.ingredient_name ?? ''}" 
                            class="ingredient-name-input">
                     <input type="number" 
-                           id="ingredient-amount-${index}" 
-                           value="${item.grams}" 
+                           value="${item.grams ?? ''}" 
                            class="ingredient-amount-input"
                            min="0"
                            step="0.1">
                     <span class="unit">g</span>
                 </div>
-                <button class="btn-remove-ingredient" onclick="nutritionChat.removeIngredient(${index})">
+                <button type="button" class="btn-remove-ingredient">
                     <i class="fas fa-times"></i>
                 </button>
             `;
             ingredientsList.appendChild(ingredientDiv);
-            
-            // Calculate totals (would need actual nutrition data from ingredients)
-            // This is simplified - in production, you'd look up actual values
         });
         
         // Store meal data for later
@@ -255,10 +251,25 @@ class NutritionChat {
         // Update panel title
         document.getElementById('panelTitle').textContent = 'Review Your Meal';
         
+        // Wire up interactions
+        ingredientsList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-remove-ingredient');
+            if (!btn) return;
+            const row = btn.closest('.ingredient-item');
+            if (row) row.remove();
+            this.computeAndRenderNutrition();
+        });
+
+        ingredientsList.addEventListener('input', (e) => {
+            if (e.target.matches('.ingredient-name-input') || e.target.matches('.ingredient-amount-input')) {
+                this.debouncedCompute();
+            }
+        });
+
         // Show panel
         this.openPanel();
-        
-        // Don't add a hardcoded message - the conversation agent will handle this
+        // Initial compute
+        this.computeAndRenderNutrition();
     }
     
     showRecipePanel(recipe) {
@@ -363,30 +374,11 @@ class NutritionChat {
     }
     
     confirmMeal() {
-        // Collect updated meal data
-        const updatedItems = [];
-        this.pendingMealData.items.forEach((item, index) => {
-            const name = document.getElementById(`ingredient-name-${index}`).value;
-            const amount = parseFloat(document.getElementById(`ingredient-amount-${index}`).value);
-            
-            if (name && amount > 0) {
-                updatedItems.push({
-                    ingredient_name: name,
-                    grams: amount,
-                    ingredient_id: item.ingredient_id
-                });
-            }
-        });
-        
+        // Collect updated meal data from DOM
+        const updatedItems = this.collectItemsFromPanel();
         const notes = document.getElementById('mealNotes').value;
-        
-        // Here you would send the confirmed meal to the backend
         this.logMeal(updatedItems, notes);
-        
-        // Close panel
         this.closePanel();
-        
-        // Don't add a hardcoded message - let the backend handle appropriate responses
     }
     
     async logMeal(items, notes) {
@@ -433,12 +425,72 @@ class NutritionChat {
     }
     
     removeIngredient(index) {
-        // Remove ingredient from the list
+        // Backward-compat: still support older inline onclick handlers
         const ingredientItem = document.querySelectorAll('.ingredient-item')[index];
         if (ingredientItem) {
             ingredientItem.remove();
+            this.computeAndRenderNutrition();
         }
     }
+
+    collectItemsFromPanel() {
+        const rows = document.querySelectorAll('.ingredient-item');
+        const items = [];
+        rows.forEach(row => {
+            const name = row.querySelector('.ingredient-name-input')?.value?.trim() || '';
+            const grams = parseFloat(row.querySelector('.ingredient-amount-input')?.value || '0') || 0;
+            if (!name || grams <= 0) return;
+            const original = row.dataset.originalName || '';
+            const ingId = row.dataset.ingredientId;
+            const payload = { ingredient_name: name, grams: grams };
+            if (ingId && original && original.toLowerCase() === name.toLowerCase()) {
+                payload.ingredient_id = parseInt(ingId, 10);
+            }
+            items.push(payload);
+        });
+        return items;
+    }
+
+    updateNutritionSummaryUI(n) {
+        try {
+            document.getElementById('totalCalories').textContent = n.calories != null ? n.calories : 0;
+            document.getElementById('totalProtein').textContent = (n.protein != null ? n.protein : 0) + 'g';
+            document.getElementById('totalCarbs').textContent = (n.carbs != null ? n.carbs : 0) + 'g';
+            document.getElementById('totalFat').textContent = (n.fat != null ? n.fat : 0) + 'g';
+        } catch (e) {
+            // No-op if elements not present
+        }
+    }
+
+    async computeAndRenderNutrition() {
+        const items = this.collectItemsFromPanel();
+        if (!items.length) { this.updateNutritionSummaryUI({ calories: 0, protein: 0, carbs: 0, fat: 0 }); return; }
+        try {
+            const resp = await fetch('/api/compute_nutrition', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items })
+            });
+            const data = await resp.json();
+            const n = {
+                calories: Math.round((data.calories || 0) * 10) / 10,
+                protein: Math.round((data.protein || 0) * 10) / 10,
+                carbs: Math.round((data.carbs || 0) * 10) / 10,
+                fat: Math.round((data.fat || 0) * 10) / 10,
+            };
+            this.updateNutritionSummaryUI(n);
+        } catch (e) {
+            console.error('Failed to compute nutrition', e);
+        }
+    }
+
+    debouncedCompute = (() => {
+        let t = null;
+        return () => {
+            clearTimeout(t);
+            t = setTimeout(() => this.computeAndRenderNutrition(), 250);
+        };
+    })();
     
     openPanel() {
         this.sidePanel.classList.add('panel-open');

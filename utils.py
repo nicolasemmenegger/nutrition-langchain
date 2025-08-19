@@ -21,16 +21,29 @@ def calculate_meal_nutrition(ingredients_ids, ingredient_weights):
     """
     Calculate the nutrition of a meal based on the ingredients and their weights.
     """
-    ingredients = Ingredient.query.filter(Ingredient.id.in_(ingredients_ids)).all()
-    calories = 0
-    protein = 0
-    carbs = 0
-    fat = 0
-    for ingredient, weight in zip(ingredients, ingredient_weights):
-        calories += float(ingredient.calories) * float(weight) / float(ingredient.unit_weight)
-        protein += float(ingredient.protein) * float(weight) / float(ingredient.unit_weight)
-        carbs += float(ingredient.carbs) * float(weight) / float(ingredient.unit_weight)
-        fat += float(ingredient.fat) * float(weight) / float(ingredient.unit_weight)
+    # Fetch in bulk, then map by id to preserve correspondence with weights
+    try:
+        ids_int = [int(x) for x in ingredients_ids]
+    except Exception:
+        ids_int = []
+
+    ingredients = Ingredient.query.filter(Ingredient.id.in_(ids_int)).all() if ids_int else []
+    ingredient_by_id = {ing.id: ing for ing in ingredients}
+
+    calories = 0.0
+    protein = 0.0
+    carbs = 0.0
+    fat = 0.0
+    for ing_id, weight in zip(ids_int, ingredient_weights):
+        ing = ingredient_by_id.get(int(ing_id))
+        if not ing:
+            continue
+        w = float(weight) or 0.0
+        unit = float(ing.unit_weight) or 100.0
+        calories += float(ing.calories) * w / unit
+        protein += float(ing.protein) * w / unit
+        carbs += float(ing.carbs) * w / unit
+        fat += float(ing.fat) * w / unit
     return calories, protein, carbs, fat
 
 def get_meals_for_date(date, user_id):
@@ -38,23 +51,37 @@ def get_meals_for_date(date, user_id):
     meals = Meal.query.filter_by(user_id=user_id, date=date).all()
     for meal in meals:
         meal_nutrition = MealNutrition.query.filter_by(meal_id=meal.id).first()
-        meal.calories = round(meal_nutrition.calories, 2)
-        meal.protein = round(meal_nutrition.protein, 2)
-        meal.carbs = round(meal_nutrition.carbs, 2)
-        meal.fat = round(meal_nutrition.fat, 2)
-    # group by meal name
-    meals_grouped = {"total": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}}
+        if meal_nutrition:
+            meal.calories = round(float(meal_nutrition.calories or 0), 2)
+            meal.protein = round(float(meal_nutrition.protein or 0), 2)
+            meal.carbs = round(float(meal_nutrition.carbs or 0), 2)
+            meal.fat = round(float(meal_nutrition.fat or 0), 2)
+        else:
+            meal.calories = 0.0
+            meal.protein = 0.0
+            meal.carbs = 0.0
+            meal.fat = 0.0
+    # group by meal type, prepopulate known types for template safety
+    meals_grouped = {
+        "breakfast": {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0},
+        "lunch": {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0},
+        "dinner": {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0},
+        "snack": {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0},
+        "total": {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0},
+    }
     for meal in meals:
         if meal.meal_type not in meals_grouped:
-            meals_grouped[meal.meal_type] = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
-        meals_grouped[meal.meal_type]["calories"] += meal.calories
-        meals_grouped[meal.meal_type]["protein"] += meal.protein
-        meals_grouped[meal.meal_type]["carbs"] += meal.carbs
-        meals_grouped[meal.meal_type]["fat"] += meal.fat
-    meals_grouped["total"]["calories"] = sum(meal["calories"] for meal in meals_grouped.values())
-    meals_grouped["total"]["protein"] = sum(meal["protein"] for meal in meals_grouped.values())
-    meals_grouped["total"]["carbs"] = sum(meal["carbs"] for meal in meals_grouped.values())
-    meals_grouped["total"]["fat"] = sum(meal["fat"] for meal in meals_grouped.values())
+            meals_grouped[meal.meal_type] = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+        meals_grouped[meal.meal_type]["calories"] += float(meal.calories or 0.0)
+        meals_grouped[meal.meal_type]["protein"] += float(meal.protein or 0.0)
+        meals_grouped[meal.meal_type]["carbs"] += float(meal.carbs or 0.0)
+        meals_grouped[meal.meal_type]["fat"] += float(meal.fat or 0.0)
+    # Compute totals only from actual meal_type keys, excluding 'total'
+    types = [k for k in meals_grouped.keys() if k != "total"]
+    meals_grouped["total"]["calories"] = round(sum(meals_grouped[t]["calories"] for t in types), 2)
+    meals_grouped["total"]["protein"] = round(sum(meals_grouped[t]["protein"] for t in types), 2)
+    meals_grouped["total"]["carbs"] = round(sum(meals_grouped[t]["carbs"] for t in types), 2)
+    meals_grouped["total"]["fat"] = round(sum(meals_grouped[t]["fat"] for t in types), 2)
 
     print(meals_grouped)
     return meals_grouped
