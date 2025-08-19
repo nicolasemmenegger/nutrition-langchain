@@ -14,7 +14,6 @@ class State(TypedDict):
     user_id: str
     image_data: Optional[str]
     category: Optional[str]
-    is_specific: Optional[bool]
     chat_history: Optional[list]
     response: Optional[Dict[str, Any]]
     error: Optional[str]
@@ -192,7 +191,6 @@ class NutritionAssistant:
                 "user_id": user_id,
                 "image_data": image_data,
                 "category": None,
-                "is_specific": None,
                 "chat_history": None,
                 "response": None,
                 "error": None,

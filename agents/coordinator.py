@@ -17,15 +17,15 @@ class CoordinatorAgent(BaseAgent):
         super().__init__("coordinator", openai_api_key)
         self.client = OpenAI(api_key=openai_api_key)
     
-    def classify_request(self, user_input: str, chat_history: list[ChatMessage] = None, has_image: bool = False) -> Tuple[str, bool]:
+    def classify_request(self, user_input: str, chat_history: list[ChatMessage] = None, has_image: bool = False) -> str:
         """
-        Classify request and determine if it's specific enough to delegate
-        Returns: (category, is_specific_enough)
+        Classify request into appropriate category
+        Returns: category
         """
         
-        # If there's an image, it's specific enough for analysis
+        # If there's an image, route to meal analysis
         if has_image:
-            return "analyze_meal", True
+            return "analyze_meal"
         
         # Build messages with recent chat history
         history_messages = []
@@ -44,32 +44,27 @@ class CoordinatorAgent(BaseAgent):
         
         messages = [
             {"role": "system", "content": """
-                You are a request classifier for a nutrition assistant. Your job is to:
-                1. Classify the user's request into the appropriate category
-                2. Determine if the request is specific enough to delegate to the meal analyzer agent
+                You are a request classifier for a nutrition assistant. Your job is to classify the user's request into the appropriate category
                 
                 Categories:
-                - analyze_meal: User wants to log specific food items with quantities (e.g., "I had 2 eggs and toast", "150g of chicken breast")
-                - recipe_generation: User wants a recipe suggestion. (e.g "What should I eat today?)
+                - analyze_meal: User wants to food items (e.g., "I had eggs and toast", "150g of chicken breast")
+                - recipe_generation: User wants a recipe suggestion. (e.g "What should I eat today? )
                 - coaching: User wants some general advice (e.g. "How could I improve my diet")
-                - conversation: General chat, greetings, or requests that need clarification
+                - conversation: General chat, greetings, or meal logging requests that need clarification
+            
                 
-                A request is NOT SPECIFIC ENOUGH when:
-                - when a meal is to be analyzed, but the user does not tell you what they ate.
+                How to distinguish between analyze_meal and conversation:
+                - conversation: when a meal is to be analyzed, but the user does not tell you anything at all about what they ate. At most 2 follow-ups can be asked
+                - analyze_meal: when it's possible to determine something based on the context. This is preferred! Additionally, if the user declines to specify more, you should defer to analyze_meal.
                 
-                A request that needs CONVERSATION when:
-                - It's a greeting or general chat
-                - The request is not specific enough to provide ANY guess
-                  
                 Additional pointers:
                 - Look at the conversation history to understand context. 
-                - If the user is providing details in response to a previous question, consider the full context. 
-                - Also consider the assistant responses from the specialized agents. They are identified using their name field.
+                - It is very important that you are recency biased! (e.g. the most recent messages being from the "recipe" assistant means that unless the user signals it, they most likely still want recipe suggestions)
+                - Therefore, you must consider the assistant responses from the specialized agents. They are identified using their name field.
                 
                 Return a JSON object with:
                 {
                     "category": "one of the categories above",
-                    "is_specific": true/false (whether it's specific enough to delegate),
                     "reasoning": "brief explanation of your decision"
                 }
             """},
@@ -104,20 +99,14 @@ class CoordinatorAgent(BaseAgent):
                 }, indent=2))
             
             category = result.get("category", "conversation")
-            is_specific = result.get("is_specific", False)
             
             # Validate category
             if category not in self.CATEGORIES:
                 category = "conversation"
-                is_specific = False
             
-            # If not specific enough, route to conversation
-            if not is_specific:
-                category = "conversation"
+            print(f"Coordinator: category={category}, reasoning={result.get('reasoning', '')}")
             
-            print(f"Coordinator: category={category}, specific={is_specific}, reasoning={result.get('reasoning', '')}")
-            
-            return category, is_specific
+            return category
             
         except Exception as e:
             print(f"Error in classification: {e}")
@@ -132,12 +121,11 @@ class CoordinatorAgent(BaseAgent):
         # Retrieve chat history
         chat_history = self.get_chat_history(user_id, limit=MAX_NUM_MESSAGES_COORDINATOR) # you can set a limit here
         
-        # Classify and check specificity
-        category, is_specific = self.classify_request(user_input, chat_history, has_image=bool(image_data))
+        # Classify request
+        category = self.classify_request(user_input, chat_history, has_image=bool(image_data))
         
         # Update state
         state["category"] = category
-        state["is_specific"] = is_specific
         state["chat_history"] = chat_history
         
         print(f"Coordinator routing to: {category}")
