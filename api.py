@@ -110,12 +110,23 @@ def get_chat_history():
 
     try:
         records = ChatHistory.get_user_history(str(user_id), limit=50)
-        # Return as a simple array of {role, content}
-        messages = [{
-            "role": rec.role,
-            "content": rec.content,
-            "category": rec.category,
-        } for rec in reversed(records)]
+        # Return as a simple array of {role, content, name}
+        messages = []
+        for rec in reversed(records):
+            msg = {
+                "role": rec.role,
+                "content": rec.content,
+                "category": rec.category,
+            }
+            # Extract name from metadata if present
+            if rec.message_metadata:
+                try:
+                    metadata = json.loads(rec.message_metadata)
+                    if metadata.get("name"):
+                        msg["name"] = metadata["name"]
+                except:
+                    pass
+            messages.append(msg)
         return jsonify({"messages": messages})
     except Exception as e:
         return jsonify({"messages": [], "error": str(e)}), 500

@@ -253,7 +253,7 @@ class RecipeGenerationAgent(BaseAgent):
         
         print(f"Recipe agent processing request: '{user_input}'")
         
-        # Save user message
+        # Save the user message - the conversation agent won't save it since we'll pass an assistant_response
         self.save_chat_message(
             user_id,
             ChatMessage(
@@ -286,17 +286,12 @@ class RecipeGenerationAgent(BaseAgent):
                         "grams": ing["grams"]
                     })
         
-        # Save assistant message with plain text for better context in future requests
-        self.save_chat_message(
-            user_id,
-            ChatMessage(
-                role="assistant",
-                content=plain_text_response,  # Use plain text for chat history
-                metadata={"type": "recipe_generation", "recipe": recipe},
-                category="recipe_generation",
-                name="recipe_generator"
-            )
-        )
+        # Don't save message here - pass it to conversation agent through state
+        state["assistant_response"] = {
+            "content": plain_text_response,
+            "metadata": {"type": "recipe_generation", "recipe": recipe},
+            "name": "recipe_generator"
+        }
         
         # Update state - don't include HTML in response for chat window
         state["response"] = {

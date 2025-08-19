@@ -21,21 +21,35 @@ class ConversationAgent(BaseAgent):
         chat_history = state.get("chat_history", [])
         category = state.get("category", "conversation")
         previous_action = state.get("previous_action")
+        assistant_response = state.get("assistant_response")
         
-        # Only save user message if this is a direct conversation request
-        # (not a follow-up after analyzer/recipe)
-        if previous_action not in ["analyze_meal", "recipe_generation"]:
+        # If there's an assistant response from a specialized agent, save it
+        # Otherwise, save the user message (direct from coordinator)
+        if assistant_response:
+            # Coming from analyzer/recipe - save their assistant response
+            self.save_chat_message(
+                user_id,
+                ChatMessage(
+                    role="assistant",
+                    content=assistant_response.get("content", ""),
+                    metadata=assistant_response.get("metadata", {}),
+                    category=category,
+                    name=assistant_response.get("name", "")
+                )
+            )
+        else:
+            # Coming directly from coordinator - save user message
             self.save_chat_message(
                 user_id,
                 ChatMessage(
                     role="user",
                     content=user_input,
-                    metadata={"category": category},
+                    metadata={"category": category, "has_image": bool(state.get("image_data"))},
                     category=category
                 )
             )
         
-        # Get fresh chat history 
+        # Get fresh chat history that includes the just-saved message
         chat_history = self.get_chat_history(user_id)
         
         # Build messages with recent chat history
@@ -88,9 +102,7 @@ class ConversationAgent(BaseAgent):
             """},
         ] + list(reversed(history_messages))
         
-        # Only add user input if this is a direct conversation (not a follow-up)
-        if previous_action not in ["analyze_meal", "recipe_generation"]:
-            messages.append({"role": "user", "content": user_input})
+        # No need to add user input - it's already in the chat history we just fetched
         
         try:
             # Log the request

@@ -20,6 +20,7 @@ class State(TypedDict):
     error: Optional[str]
     previous_action: Optional[str]  # Track what action was just completed
     side_panel_data: Optional[Dict[str, Any]]  # Data for the side panel (meal items, recipe, etc.)
+    assistant_response: Optional[Dict[str, Any]]  # Assistant response to pass to conversation agent
 
 def create_nutrition_workflow(openai_api_key: str = None):
     """Create and configure the LangGraph workflow"""

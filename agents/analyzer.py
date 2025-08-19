@@ -289,7 +289,7 @@ class AnalyzerAgent(BaseAgent):
         
         print(f"Analyzer processing: user_input='{user_input[:50]}...', has_image={bool(image_data)}")
         
-        # Save user message
+        # Save the user message - the conversation agent won't save it since we'll pass an assistant_response
         self.save_chat_message(
             user_id,
             ChatMessage(
@@ -358,17 +358,12 @@ class AnalyzerAgent(BaseAgent):
         # Create plain text summary for chat history
         plain_text_response = self.format_analysis_plain_text(out)
         
-        # Save assistant message with plain text for better context
-        self.save_chat_message(
-            user_id,
-            ChatMessage(
-                role="assistant",
-                content=plain_text_response,  # Use plain text for chat history
-                metadata={"type": "analyze_meal", "items": out},
-                category="analyze_meal",
-                name="meal_analyzer"
-            )
-        )
+        # Don't save message here - pass it to conversation agent through state
+        state["assistant_response"] = {
+            "content": plain_text_response,
+            "metadata": {"type": "analyze_meal", "items": out},
+            "name": "meal_analyzer"
+        }
         
         print(f"Analyzer returning {len(out)} items in response")
         state["response"] = response_data

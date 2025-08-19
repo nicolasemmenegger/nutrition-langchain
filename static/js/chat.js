@@ -93,8 +93,11 @@ class NutritionChat {
             // Debug log to see what's returned
             console.log('Response data:', data);
             
-            // Add assistant response
-            this.addMessage(data.reply_html, 'assistant', null, true);
+            // Add assistant response only if it's not empty
+            // (analyzer and recipe generator return empty strings since their output goes to side panel)
+            if (data.reply_html && data.reply_html.trim() !== '') {
+                this.addMessage(data.reply_html, 'assistant', null, true);
+            }
             
             // Handle side panel data if present
             if (data.side_panel_data) {
@@ -140,10 +143,12 @@ class NutritionChat {
             const res = await fetch('/api/chat_history', { credentials: 'same-origin' });
             const data = await res.json();
             if (Array.isArray(data.messages)) {
-                // Skip the initial welcome already rendered; append historical messages
+                // Only display messages from users or the conversation agent
                 data.messages.forEach((m) => {
-                    // Avoid duplicating the welcome line; only render actual saved messages
-                    this.addMessage(m.content, m.role, null, true);
+                    // Show user messages and assistant messages from the conversation agent only
+                    if (m.role === 'user' || (m.role === 'assistant' && m.name === 'conversation')) {
+                        this.addMessage(m.content, m.role, null, true);
+                    }
                 });
                 this.scrollToBottom();
             }
@@ -248,8 +253,7 @@ class NutritionChat {
         // Show panel
         this.openPanel();
         
-        // Add follow-up message
-        this.addMessage("I've detected the ingredients from your meal. Please review them in the panel on the right. Let me know if something seems off or if you'd like to adjust the quantities.", 'assistant');
+        // Don't add a hardcoded message - the conversation agent will handle this
     }
     
     showRecipePanel(recipe) {
@@ -380,8 +384,7 @@ class NutritionChat {
         // Close panel
         this.closePanel();
         
-        // Add confirmation message
-        this.addMessage("Great! I've logged your meal. Your nutritional intake has been recorded. Is there anything else you'd like to track today?", 'assistant');
+        // Don't add a hardcoded message - let the backend handle appropriate responses
     }
     
     async logMeal(items, notes) {
@@ -418,13 +421,13 @@ class NutritionChat {
         this.logMeal(items, `Recipe: ${this.pendingRecipeData.recipe_name}`);
         
         this.closePanel();
-        this.addMessage(`I've logged "${this.pendingRecipeData.recipe_name}" as your meal. The ingredients have been recorded in your nutrition tracking.`, 'assistant');
+        // Don't add a hardcoded message - let the backend handle appropriate responses
     }
     
     saveRecipe() {
         // Save recipe for later (would implement backend endpoint)
         console.log('Saving recipe:', this.pendingRecipeData);
-        this.addMessage('Recipe saved to your collection!', 'assistant');
+        // Don't add a hardcoded message - let the backend handle appropriate responses
     }
     
     removeIngredient(index) {
