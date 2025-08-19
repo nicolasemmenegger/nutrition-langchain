@@ -269,20 +269,20 @@ class NutritionChat {
         // Meal type scroller chips
         const scroller = document.getElementById('mealTypeScroller');
         if (scroller) {
-            // default selection based on current time
-            let defaultType = this._defaultMealTypeForNow();
+            const defaultType = this._defaultMealTypeForNow();
             let active = null;
-            scroller.querySelectorAll('.meal-type-chip').forEach(btn => {
+            const chips = scroller.querySelectorAll('.meal-type-chip');
+            chips.forEach(btn => {
                 if (btn.dataset.type === defaultType && !active) {
-                    btn.classList.add('bg-blue-600','text-white','border-blue-600');
                     active = btn;
                 }
                 btn.addEventListener('click', () => {
-                    scroller.querySelectorAll('.meal-type-chip').forEach(b => b.classList.remove('bg-blue-600','text-white','border-blue-600'));
-                    btn.classList.add('bg-blue-600','text-white','border-blue-600');
+                    this._setMealTypeChipActive(btn);
                     this.selectedMealType = btn.dataset.type;
                 });
             });
+            if (!active && chips.length) active = chips[0];
+            if (active) this._setMealTypeChipActive(active);
             this.selectedMealType = active ? active.dataset.type : defaultType;
         }
 
@@ -524,6 +524,23 @@ class NutritionChat {
         } catch {
             return 'lunch';
         }
+    }
+
+    _setMealTypeChipActive(activeBtn) {
+        try {
+            const scroller = document.getElementById('mealTypeScroller');
+            if (!scroller) return;
+            scroller.querySelectorAll('.meal-type-chip').forEach(b => {
+                b.style.backgroundColor = '#ffffff';
+                b.style.color = '#1f2937'; // gray-800
+                b.style.borderColor = '#d1d5db'; // gray-300
+            });
+            if (activeBtn) {
+                activeBtn.style.backgroundColor = '#16a34a'; // green-600
+                activeBtn.style.color = '#ffffff';
+                activeBtn.style.borderColor = '#16a34a';
+            }
+        } catch {}
     }
     
     openPanel() {
