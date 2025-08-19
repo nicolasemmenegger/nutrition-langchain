@@ -353,6 +353,18 @@ class NutritionChat {
             this.selectedMealType = active ? active.dataset.type : defaultType;
         }
 
+        // Default meal date to today
+        const mealDate = document.getElementById('mealDate');
+        if (mealDate) {
+            try {
+                const d = new Date();
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                mealDate.value = `${yyyy}-${mm}-${dd}`;
+            } catch {}
+        }
+
         // Show panel
         this.openPanel();
         // Initial compute
@@ -464,11 +476,12 @@ class NutritionChat {
         // Collect updated meal data from DOM
         const updatedItems = this.collectItemsFromPanel();
         const notes = document.getElementById('mealNotes').value;
-        this.logMeal(updatedItems, notes, this.selectedMealType);
+        const mealDate = (document.getElementById('mealDate')?.value || '').trim();
+        this.logMeal(updatedItems, notes, this.selectedMealType, mealDate);
         this.closePanel();
     }
     
-    async logMeal(items, notes, mealType) {
+    async logMeal(items, notes, mealType, dateStr) {
         // Send to backend to save meal
         try {
             const response = await fetch('/api/log_meal', {
@@ -480,6 +493,7 @@ class NutritionChat {
                     items: items,
                     notes: notes,
                     meal_type: mealType,
+                    date: dateStr,
                     timestamp: new Date().toISOString()
                 })
             });

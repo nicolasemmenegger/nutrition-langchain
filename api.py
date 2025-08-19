@@ -158,6 +158,7 @@ def log_meal():
     notes = data.get('notes', '')
     requested_meal_type = (data.get('meal_type') or '').strip().lower()
     timestamp = data.get('timestamp', datetime.utcnow().isoformat())
+    specified_date_str = (data.get('date') or '').strip()
     
     # Require an authenticated user (session user_id must be an integer)
     if 'user_id' not in session:
@@ -177,7 +178,17 @@ def log_meal():
         except Exception:
             dt = datetime.utcnow()
 
-        meal_date = dt.date()
+        # Use specified date if provided and valid (YYYY-MM-DD), else from timestamp
+        if specified_date_str:
+            try:
+                meal_date = datetime.fromisoformat(specified_date_str).date()
+            except Exception:
+                try:
+                    meal_date = datetime.strptime(specified_date_str, '%Y-%m-%d').date()
+                except Exception:
+                    meal_date = dt.date()
+        else:
+            meal_date = dt.date()
         hour = dt.hour
         # Choose based on user selection if valid; otherwise infer from time
         valid_types = {'breakfast','lunch','dinner','snack','other'}
