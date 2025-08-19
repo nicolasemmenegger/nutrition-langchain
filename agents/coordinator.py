@@ -54,17 +54,13 @@ class CoordinatorAgent(BaseAgent):
                 - coaching: User wants some general advice (e.g. "How could I improve my diet")
                 - conversation: General chat, greetings, or requests that need clarification
                 
-                A request is SPECIFIC ENOUGH when:
-                - For analyze_meal: Food items AND quantities are mentioned (e.g., "2 eggs", "a bowl of rice", "150g chicken")
-                - For recipe_generation: Always!
+                A request is NOT SPECIFIC ENOUGH when:
+                - when a meal is to be analyzed, but the user does not tell you what they ate.
                 
                 A request that needs CONVERSATION when:
                 - It's a greeting or general chat
-                - If it suggests that the user wants to log a meal but
-                    a) It's too vague (e.g., "I had breakfast") or
-                    b) It's missing critical details (e.g., "just eggs" without quantity, "a recipe" without type). 
-                  However, if the user refuses to give any clarifications you should defer to the appropriate agent and let it formulate a best guess
-                
+                - The request is not specific enough to provide ANY guess
+                  
                 Additional pointers:
                 - Look at the conversation history to understand context. 
                 - If the user is providing details in response to a previous question, consider the full context. 

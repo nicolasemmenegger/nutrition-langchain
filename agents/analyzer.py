@@ -50,7 +50,25 @@ class AnalyzerAgent(BaseAgent):
         
         messages = [
             {"role": "system", "content": [
-                {"type": "text", "text": "You are a nutrition parser that extracts ingredients and weights."},
+                {"type": "text", "text": """
+                You are a nutrition parser that extracts ingredients and weights. Follow the following principles:
+                 - If the user specifies a weight for an ingredient, use that. Infer the missing ingredient weights based on your common knowledge.
+                 - If the user does not specify any weights, use a typical serving size as reference point
+                 - If the user mentions eating a well-known meal, you MUST decompose it into its known ingredients. 
+                 
+                 Examples:
+                  - I had one serving of french toast with strawberries: decompose into bread, sugar, maple syrum, butter etc.
+                  - I had a big-mac: decompose into known ingredients.
+                  - I had one serving of this recipe: look up the recipe and compute ingredients for one serving size
+                  
+                  Final words: 
+                   - always be as specific as possible. 
+                   - Estimate missing values whenever necessary
+                   - Make sure the proportions of the ingredients make sense if there are unspecified parts
+                   - Use the context that is being passed to understand whether the latest query is all that is needed, or if earlier messages are relevant too.
+                    (For instance, the user could be telling you to adapt a previous estimate, in which case you must look at the bigger context). 
+                  - You may use image data to infer ingredients too.
+                """},
                 {"type": "text", "text": STRUCTURE_SPEC}
             ]},
         ] + list(reversed(history_messages)) + [
