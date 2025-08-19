@@ -41,36 +41,37 @@ class CoordinatorAgent(BaseAgent):
                 if msg.role == "assistant" and msg.name:
                     msg_dict["name"] = msg.name
                 history_messages.append(msg_dict)
-        
+
         messages = [
-            {"role": "system", "content": """
-                You are a request classifier for a nutrition assistant. Your job is to classify the user's request into the appropriate category
-                
+                       {"role": "system", "content": """
+                You are a request classifier for a nutrition assistant. Your job is to classify the user's request into the appropriate category. You should use the full context that is being passed to you.
+                Conversation messages come either from the user, or from an assistant. The assistants that write to the chat history are a conversational agent, a recipe generation agent, 
+                and a meal logging agent. Your goal is to determine which agent gets the current request. Use the full conversation history.
+
                 Categories:
-                - analyze_meal: User wants to food items (e.g., "I had eggs and toast", "150g of chicken breast")
-                - recipe_generation: User wants a recipe suggestion. (e.g "What should I eat today? )
+                - analyze_meal: User wants to log food items with sufficient precision (e.g., "I had eggs and toast", "150g of chicken breast")
+                - recipe_generation: User wants a recipe suggestion and provides some minimal context. ("What could I eat for breakfast")
+                    * At least some context should be specified  (e.g. whether it's lunch or dinner or breakfast or whether a specific ingredient is present: "I need to use this tofu")
                 - coaching: User wants some general advice (e.g. "How could I improve my diet")
-                - conversation: General chat, greetings, or meal logging requests that need clarification
-            
-                
-                How to distinguish between analyze_meal and conversation:
-                - conversation: when a meal is to be analyzed, but the user does not tell you anything at all about what they ate. At most 2 follow-ups can be asked
-                - analyze_meal: when it's possible to determine something based on the context. This is preferred! Additionally, if the user declines to specify more, you should defer to analyze_meal.
-                
-                Additional pointers:
-                - Look at the conversation history to understand context. 
-                - It is very important that you are recency biased! (e.g. the most recent messages being from the "recipe" assistant means that unless the user signals it, they most likely still want recipe suggestions)
-                - Therefore, you must consider the assistant responses from the specialized agents. They are identified using their name field.
-                
+                - conversation: General chat, greetings, meal logging requests that need some clarification and recipe generation requests that need some clarification ("Hi" or "I ate pasta today" or "Help me find what to eat" all warrant some follow-ups, so conversation is appropriate)
+
+                Pointers:
+                - If there is no prior context in the messages, and the request is vague, defer to conversation. For instance if the user says "I had pasta" and no follow-ups have been asked, conversation is correct.
+                - Recency bias:
+                    * if the chat history is most recently about recipe generation, you should be biased towards recipe_generation
+                    * if the chat history is most recently about recipe logging, you should be biased towards analyze_meal
+                - However, do not defer to conversation too many times in a row, so check the history before deferring to conversation
+                - Important: If the user declines to clarify ("no"), go with analyze_meal or recipe_generation based on previous context!
+
                 Return a JSON object with:
                 {
                     "category": "one of the categories above",
                     "reasoning": "brief explanation of your decision"
                 }
             """},
-        ] + list(reversed(history_messages)) + [
-            {"role": "user", "content": user_input}
-        ]
+       ] + list(reversed(history_messages)) + [
+           {"role": "user", "content": user_input}
+       ]
         
         try:
             # Log the request
