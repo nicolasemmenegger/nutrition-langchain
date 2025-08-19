@@ -70,6 +70,15 @@ class AnalyzerAgent(BaseAgent):
             raw = resp.choices[0].message.content
             parsed_result = json.loads(raw)
             
+            # Log the response to a timestamped file
+            response_log_filename = f"logs/analyzer_response_{timestamp}.log"
+            with open(response_log_filename, 'w') as f:
+                f.write(json.dumps({
+                    "response": parsed_result,
+                    "model": self.parser_model,
+                    "timestamp": timestamp
+                }, indent=2))
+            
             # Debug logging
             print(f"Analyzer parsed result: {parsed_result}")
             
@@ -86,16 +95,33 @@ class AnalyzerAgent(BaseAgent):
         nutri_system = f"You create compact nutrition cards.\n{NUTRITION_CARD_SPEC}"
         
         try:
+            # Log the request
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_filename = f"logs/analyzer_nutrition_{timestamp}.log"
+            messages = [
+                {"role": "system", "content": [{"type": "text", "text": nutri_system}]},
+                {"role": "user", "content": [{"type": "text", "text": f"Create card for: {ingredient_name}"}]},
+            ]
+            with open(log_filename, 'w') as f:
+                f.write(json.dumps(messages, indent=2))
+            
             resp = self.client.chat.completions.create(
                 model=self.nutrition_model,
                 temperature=0.2,
                 response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": [{"type": "text", "text": nutri_system}]},
-                    {"role": "user", "content": [{"type": "text", "text": f"Create card for: {ingredient_name}"}]},
-                ],
+                messages=messages,
             )
             card = json.loads(resp.choices[0].message.content)
+            
+            # Log the response
+            response_log_filename = f"logs/analyzer_nutrition_response_{timestamp}.log"
+            with open(response_log_filename, 'w') as f:
+                f.write(json.dumps({
+                    "response": card,
+                    "model": self.nutrition_model,
+                    "ingredient": ingredient_name,
+                    "timestamp": timestamp
+                }, indent=2))
             
             # Validate card
             if "per_100g" in card and all(k in card["per_100g"] for k in ("calories", "protein", "carbs", "fat")):

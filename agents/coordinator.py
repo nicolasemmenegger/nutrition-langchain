@@ -102,6 +102,15 @@ class CoordinatorAgent(BaseAgent):
             )
             
             result = json.loads(response.choices[0].message.content)
+            
+            # Log the response to a timestamped file
+            response_log_filename = f"logs/coordinator_response_{timestamp}.log"
+            with open(response_log_filename, 'w') as f:
+                f.write(json.dumps({
+                    "response": result,
+                    "model": "gpt-4o-mini",
+                    "timestamp": timestamp
+                }, indent=2))
             category = result.get("category", "conversation")
             
             # Build the response HTML with debug label

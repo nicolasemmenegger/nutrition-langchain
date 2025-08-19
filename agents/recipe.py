@@ -108,7 +108,18 @@ class RecipeGenerationAgent(BaseAgent):
                 response_format={"type": "json_object"},
             )
             
-            return json.loads(response.choices[0].message.content)
+            recipe_result = json.loads(response.choices[0].message.content)
+            
+            # Log the response to a timestamped file
+            response_log_filename = f"logs/recipe_generation_response_{timestamp}.log"
+            with open(response_log_filename, 'w') as f:
+                f.write(json.dumps({
+                    "response": recipe_result,
+                    "model": "gpt-4o-mini",
+                    "timestamp": timestamp
+                }, indent=2))
+            
+            return recipe_result
             
         except Exception as e:
             print(f"Error generating recipe: {e}")
