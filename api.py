@@ -155,6 +155,7 @@ def log_meal():
     data = request.json
     items = data.get('items', [])
     notes = data.get('notes', '')
+    requested_meal_type = (data.get('meal_type') or '').strip().lower()
     timestamp = data.get('timestamp', datetime.utcnow().isoformat())
     
     # Require an authenticated user (session user_id must be an integer)
@@ -177,14 +178,19 @@ def log_meal():
 
         meal_date = dt.date()
         hour = dt.hour
-        if hour < 11:
-            meal_type = 'breakfast'
-        elif hour < 15:
-            meal_type = 'lunch'
-        elif hour < 21:
-            meal_type = 'dinner'
+        # Choose based on user selection if valid; otherwise infer from time
+        valid_types = {'breakfast','lunch','dinner','snack','other'}
+        if requested_meal_type in valid_types:
+            meal_type = requested_meal_type
         else:
-            meal_type = 'snack'
+            if hour < 11:
+                meal_type = 'breakfast'
+            elif hour < 15:
+                meal_type = 'lunch'
+            elif hour < 21:
+                meal_type = 'dinner'
+            else:
+                meal_type = 'snack'
 
         # Resolve ingredient ids and weights
         ingredient_ids = []

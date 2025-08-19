@@ -266,6 +266,26 @@ class NutritionChat {
             }
         });
 
+        // Meal type scroller chips
+        const scroller = document.getElementById('mealTypeScroller');
+        if (scroller) {
+            // default selection based on current time
+            let defaultType = this._defaultMealTypeForNow();
+            let active = null;
+            scroller.querySelectorAll('.meal-type-chip').forEach(btn => {
+                if (btn.dataset.type === defaultType && !active) {
+                    btn.classList.add('bg-blue-600','text-white','border-blue-600');
+                    active = btn;
+                }
+                btn.addEventListener('click', () => {
+                    scroller.querySelectorAll('.meal-type-chip').forEach(b => b.classList.remove('bg-blue-600','text-white','border-blue-600'));
+                    btn.classList.add('bg-blue-600','text-white','border-blue-600');
+                    this.selectedMealType = btn.dataset.type;
+                });
+            });
+            this.selectedMealType = active ? active.dataset.type : defaultType;
+        }
+
         // Show panel
         this.openPanel();
         // Initial compute
@@ -377,11 +397,11 @@ class NutritionChat {
         // Collect updated meal data from DOM
         const updatedItems = this.collectItemsFromPanel();
         const notes = document.getElementById('mealNotes').value;
-        this.logMeal(updatedItems, notes);
+        this.logMeal(updatedItems, notes, this.selectedMealType);
         this.closePanel();
     }
     
-    async logMeal(items, notes) {
+    async logMeal(items, notes, mealType) {
         // Send to backend to save meal
         try {
             const response = await fetch('/api/log_meal', {
@@ -392,6 +412,7 @@ class NutritionChat {
                 body: JSON.stringify({
                     items: items,
                     notes: notes,
+                    meal_type: mealType,
                     timestamp: new Date().toISOString()
                 })
             });
@@ -412,7 +433,7 @@ class NutritionChat {
             grams: ing.grams || 100  // Default to 100g if not specified
         }));
         
-        this.logMeal(items, `Recipe: ${this.pendingRecipeData.recipe_name}`);
+        this.logMeal(items, `Recipe: ${this.pendingRecipeData.recipe_name}`, this.selectedMealType || this._defaultMealTypeForNow());
         
         this.closePanel();
         // Don't add a hardcoded message - let the backend handle appropriate responses
@@ -491,6 +512,19 @@ class NutritionChat {
             t = setTimeout(() => this.computeAndRenderNutrition(), 250);
         };
     })();
+
+    _defaultMealTypeForNow() {
+        try {
+            const now = new Date();
+            const h = now.getHours();
+            if (h < 11) return 'breakfast';
+            if (h < 15) return 'lunch';
+            if (h < 21) return 'dinner';
+            return 'snack';
+        } catch {
+            return 'lunch';
+        }
+    }
     
     openPanel() {
         this.sidePanel.classList.add('panel-open');
