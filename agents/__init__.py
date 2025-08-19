@@ -1,9 +1,10 @@
 from .coordinator import CoordinatorAgent
 from .analyzer import AnalyzerAgent
-from .web_search import WebSearchAgent
 from .recipe import RecipeGenerationAgent
+from .web_search import WebSearchAgent
 from .coaching import CoachingAgent
-from .workflow import create_nutrition_workflow
+from .conversation import ConversationAgent
+from .workflow import create_nutrition_workflow, NutritionAssistant
 
 __all__ = [
     'CoordinatorAgent',
@@ -11,5 +12,7 @@ __all__ = [
     'WebSearchAgent',
     'RecipeGenerationAgent',
     'CoachingAgent',
-    'create_nutrition_workflow'
+    'ConversationAgent',
+    'create_nutrition_workflow',
+    'NutritionAssistant'
 ]

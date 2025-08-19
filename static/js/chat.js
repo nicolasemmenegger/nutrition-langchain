@@ -96,12 +96,24 @@ class NutritionChat {
             // Add assistant response
             this.addMessage(data.reply_html, 'assistant', null, true);
             
-            // Handle different response types based on category
-            if (data.category === 'analyze_meal' && data.items && data.items.length > 0) {
-                console.log('Opening meal panel with items:', data.items);
+            // Handle side panel data if present
+            if (data.side_panel_data) {
+                console.log('Side panel data received:', data.side_panel_data);
+                if (data.side_panel_data.type === 'meal') {
+                    console.log('Opening meal panel with items:', data.side_panel_data.items);
+                    this.showMealPanel(data.side_panel_data);
+                } else if (data.side_panel_data.type === 'recipe') {
+                    console.log('Opening recipe panel');
+                    this.showRecipePanel(data.side_panel_data.recipe);
+                }
+            }
+            
+            // Fallback to old logic for backward compatibility
+            else if (data.category === 'analyze_meal' && data.items && data.items.length > 0) {
+                console.log('Opening meal panel with items (legacy):', data.items);
                 this.showMealPanel(data);
             } else if (data.category === 'recipe_generation' && data.recipe) {
-                console.log('Opening recipe panel');
+                console.log('Opening recipe panel (legacy)');
                 this.showRecipePanel(data.recipe);
             } else if (data.category === 'web_search' && data.nutrition_data) {
                 // For web search results, we might want to show a simplified meal panel

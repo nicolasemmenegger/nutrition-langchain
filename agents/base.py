@@ -11,6 +11,7 @@ class ChatMessage:
     timestamp: datetime = None
     metadata: Optional[Dict[str, Any]] = None
     category: Optional[str] = None
+    name: Optional[str] = None  # Name of the assistant (e.g., 'conversation', 'meal_analyzer')
     
     def __post_init__(self):
         if self.timestamp is None:
@@ -39,12 +40,15 @@ class BaseAgent(ABC):
             
             messages = []
             for record in reversed(history_records):  # Reverse to get chronological order
+                metadata = json.loads(record.message_metadata) if record.message_metadata else None
+                name = metadata.get('name') if metadata else None
                 messages.append(ChatMessage(
                     role=record.role,
                     content=record.content,
                     timestamp=record.timestamp,
-                    metadata=json.loads(record.message_metadata) if record.message_metadata else None,
-                    category=record.category
+                    metadata=metadata,
+                    category=record.category,
+                    name=name
                 ))
             
             return messages
@@ -60,11 +64,16 @@ class BaseAgent(ABC):
             # Import here to avoid circular imports
             from models import ChatHistory
             
+            # Include name in metadata if provided
+            metadata = message.metadata or {}
+            if message.name:
+                metadata['name'] = message.name
+            
             ChatHistory.save_message(
                 user_id=str(user_id),
                 role=message.role,
                 content=message.content,
-                metadata=message.metadata,
+                metadata=metadata if metadata else None,
                 category=message.category
             )
             

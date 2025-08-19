@@ -5,6 +5,7 @@ from .analyzer import AnalyzerAgent
 from .web_search import WebSearchAgent
 from .recipe import RecipeGenerationAgent
 from .coaching import CoachingAgent
+from .conversation import ConversationAgent
 import os
 
 class State(TypedDict):
@@ -13,10 +14,12 @@ class State(TypedDict):
     user_id: str
     image_data: Optional[str]
     category: Optional[str]
-    coordinator_response: Optional[str]
+    is_specific: Optional[bool]
     chat_history: Optional[list]
     response: Optional[Dict[str, Any]]
     error: Optional[str]
+    previous_action: Optional[str]  # Track what action was just completed
+    side_panel_data: Optional[Dict[str, Any]]  # Data for the side panel (meal items, recipe, etc.)
 
 def create_nutrition_workflow(openai_api_key: str = None):
     """Create and configure the LangGraph workflow"""
@@ -30,282 +33,204 @@ def create_nutrition_workflow(openai_api_key: str = None):
     web_search = WebSearchAgent(openai_api_key)
     recipe_gen = RecipeGenerationAgent(openai_api_key)
     coaching = CoachingAgent(openai_api_key)
+    conversation = ConversationAgent(openai_api_key)
     
     # Create the graph
     workflow = StateGraph(State)
     
     # Define node functions
     def coordinate(state: State) -> State:
-        """Coordinator node"""
+        """Coordinator node - classifies and checks specificity"""
         try:
             return coordinator.process(state)
         except Exception as e:
             state["error"] = f"Coordinator error: {str(e)}"
+            state["category"] = "conversation"
             return state
     
     def analyze_meal(state: State) -> State:
         """Meal analyzer node"""
         try:
-            # Process with analyzer
-            state = analyzer.process(state)
-            
-            # Combine coordinator's response with follow-up
-            coordinator_response = state.get("coordinator_response", "")
-            follow_up = coordinator.generate_follow_up("analyze_meal", state.get("response"))
-            
-            if state.get("response"):
-                combined = coordinator_response + follow_up
-                state["response"]["reply_html"] = combined
-                # Persist the final combined assistant reply exactly once
-                try:
-                    from .base import ChatMessage
-                    coordinator.save_chat_message(
-                        state.get("user_id", "default"),
-                        ChatMessage(
-                            role="assistant",
-                            content=combined,
-                            metadata={"type": "analyze_meal", "items": state["response"].get("items", [])},
-                            category="analyze_meal"
-                        )
-                    )
-                except Exception as e:
-                    print(f"Failed saving final combined reply (analyze_meal): {e}")
-            
-            return state
+            result_state = analyzer.process(state)
+            # Mark that we just completed analysis for the conversation agent
+            result_state["previous_action"] = "analyze_meal"
+            return result_state
         except Exception as e:
             state["error"] = f"Analyzer error: {str(e)}"
             state["response"] = {
-                "reply_html": state.get("coordinator_response", "") + f"<p>I encountered an error analyzing your meal. Please try again.</p>",
+                "reply_html": f"<p>I encountered an error analyzing your meal. Please try again.</p>",
                 "items": []
             }
+            state["previous_action"] = "analyze_meal_error"
             return state
     
     def search_web(state: State) -> State:
         """Web search node"""
         try:
-            state = web_search.process(state)
-            
-            # Combine coordinator's response with follow-up
-            coordinator_response = state.get("coordinator_response", "")
-            follow_up = coordinator.generate_follow_up("web_search", state.get("response"))
-            
-            if state.get("response"):
-                combined = coordinator_response + follow_up
-                state["response"]["reply_html"] = combined
-                # Persist the final combined assistant reply exactly once
-                try:
-                    from .base import ChatMessage
-                    coordinator.save_chat_message(
-                        state.get("user_id", "default"),
-                        ChatMessage(
-                            role="assistant",
-                            content=combined,
-                            metadata={"type": "web_search", "nutrition_data": state["response"].get("nutrition_data")},
-                            category="web_search"
-                        )
-                    )
-                except Exception as e:
-                    print(f"Failed saving final combined reply (web_search): {e}")
-            
-            return state
+            result_state = web_search.process(state)
+            result_state["previous_action"] = "web_search"
+            return result_state
         except Exception as e:
             state["error"] = f"Web search error: {str(e)}"
             state["response"] = {
-                "reply_html": state.get("coordinator_response", "") + f"<p>I couldn't find nutrition information for that item. Please try describing it differently.</p>",
+                "reply_html": f"<p>I couldn't find nutrition information for that item. Please try describing it differently.</p>",
                 "items": []
             }
+            state["previous_action"] = "web_search_error"
             return state
     
     def generate_recipe(state: State) -> State:
         """Recipe generation node"""
         try:
-            state = recipe_gen.process(state)
-            
-            # Combine coordinator's response with follow-up
-            coordinator_response = state.get("coordinator_response", "")
-            follow_up = coordinator.generate_follow_up("recipe_generation", state.get("response"))
-            
-            if state.get("response"):
-                combined = coordinator_response + follow_up
-                state["response"]["reply_html"] = combined
-                # Persist the final combined assistant reply exactly once
-                try:
-                    from .base import ChatMessage
-                    coordinator.save_chat_message(
-                        state.get("user_id", "default"),
-                        ChatMessage(
-                            role="assistant",
-                            content=combined,
-                            metadata={"type": "recipe_generation", "recipe": state["response"].get("recipe")},
-                            category="recipe_generation"
-                        )
-                    )
-                except Exception as e:
-                    print(f"Failed saving final combined reply (recipe_generation): {e}")
-            
-            return state
+            result_state = recipe_gen.process(state)
+            # Mark that we just completed recipe generation for the conversation agent
+            result_state["previous_action"] = "recipe_generation"
+            return result_state
         except Exception as e:
             state["error"] = f"Recipe generation error: {str(e)}"
             state["response"] = {
-                "reply_html": state.get("coordinator_response", "") + f"<p>I couldn't generate a recipe right now. Please try again.</p>",
+                "reply_html": f"<p>I couldn't generate a recipe right now. Please try again.</p>",
                 "items": []
             }
+            state["previous_action"] = "recipe_generation_error"
             return state
     
     def provide_coaching(state: State) -> State:
         """Coaching node"""
         try:
-            state = coaching.process(state)
-            
-            # For coaching, just prepend the coordinator response
-            coordinator_response = state.get("coordinator_response", "")
-            
-            if state.get("response"):
-                combined = coordinator_response + state["response"]["reply_html"]
-                state["response"]["reply_html"] = combined
-                # Persist the final combined assistant reply exactly once
-                try:
-                    from .base import ChatMessage
-                    coordinator.save_chat_message(
-                        state.get("user_id", "default"),
-                        ChatMessage(
-                            role="assistant",
-                            content=combined,
-                            metadata={"type": "coaching", "coaching_data": state["response"].get("coaching_data", {})},
-                            category="coaching"
-                        )
-                    )
-                except Exception as e:
-                    print(f"Failed saving final combined reply (coaching): {e}")
-            
-            return state
+            result_state = coaching.process(state)
+            result_state["previous_action"] = "coaching"
+            return result_state
         except Exception as e:
             state["error"] = f"Coaching error: {str(e)}"
             state["response"] = {
-                "reply_html": state.get("coordinator_response", "") + f"<p>I couldn't provide coaching advice right now. Please try again.</p>",
+                "reply_html": f"<p>I couldn't provide coaching advice right now. Please try again.</p>",
                 "coaching_data": {}
+            }
+            state["previous_action"] = "coaching_error"
+            return state
+    
+    def handle_conversation(state: State) -> State:
+        """Conversation node - handles clarifications and general chat"""
+        try:
+            # Just process normally - the conversation agent will see the chat history
+            # and respond appropriately based on context
+            return conversation.process(state)
+        except Exception as e:
+            state["error"] = f"Conversation error: {str(e)}"
+            state["response"] = {
+                "reply_html": f"<p>I'm having trouble understanding. Could you please rephrase that?</p>",
+                "items": []
             }
             return state
     
-    # Define in_conversation node - just passes through to END for now
-    def in_conversation(state: State) -> State:
-        """Node for conversation state - response already set by coordinator"""
-        # The coordinator has already set the response
-        # This node just marks we're in conversation mode
-        return state
-    
     # Add nodes to the graph
     workflow.add_node("coordinator", coordinate)
-    workflow.add_node("analyze_meal", analyze_meal)
+    workflow.add_node("analyzer", analyze_meal)
     workflow.add_node("web_search", search_web)
     workflow.add_node("recipe_generation", generate_recipe)
     workflow.add_node("coaching", provide_coaching)
-    workflow.add_node("in_conversation", in_conversation)
+    workflow.add_node("conversation", handle_conversation)
     
     # Define routing logic
-    def route_after_coordinator(state: State) -> Literal["analyze_meal", "web_search", "recipe_generation", "coaching", "in_conversation", END]:
-        """Route based on category from coordinator"""
+    def route_from_coordinator(state: State) -> str:
+        """Route based on coordinator's classification"""
         category = state.get("category", "conversation")
         
-        # If it's conversation or clarification, stay in conversation mode
-        if category in ["conversation", "clarification"]:
-            return "in_conversation"
-        elif category == "web_search":
-            return "web_search"
-        elif category == "recipe_generation":
-            return "recipe_generation"
-        elif category == "coaching":
-            return "coaching"
-        elif category == "analyze_meal":
-            return "analyze_meal"
-        else:
-            return END
+        # Map categories to node names
+        routing_map = {
+            "analyze_meal": "analyzer",
+            "web_search": "web_search",
+            "recipe_generation": "recipe_generation",
+            "coaching": "coaching",
+            "conversation": "conversation"
+        }
+        
+        return routing_map.get(category, "conversation")
     
     # Add edges
     workflow.add_edge(START, "coordinator")
     workflow.add_conditional_edges(
         "coordinator",
-        route_after_coordinator,
+        route_from_coordinator,
         {
-            "analyze_meal": "analyze_meal",
+            "analyzer": "analyzer",
             "web_search": "web_search",
             "recipe_generation": "recipe_generation",
             "coaching": "coaching",
-            "in_conversation": "in_conversation",
-            END: END
+            "conversation": "conversation"
         }
     )
     
-    # All agent nodes lead to END
-    workflow.add_edge("analyze_meal", END)
-    workflow.add_edge("web_search", END)
-    workflow.add_edge("recipe_generation", END)
-    workflow.add_edge("coaching", END)
+    # Analyzer and Recipe Generation route to conversation for follow-up
+    workflow.add_edge("analyzer", "conversation")
+    workflow.add_edge("recipe_generation", "conversation")
     
-    # In conversation also leads to END (ready for next user input)
-    workflow.add_edge("in_conversation", END)
+    # These still go to END as they're typically final
+    workflow.add_edge("web_search", END)
+    workflow.add_edge("coaching", END)
+    workflow.add_edge("conversation", END)
     
     # Compile the graph
     return workflow.compile()
 
+
 class NutritionAssistant:
-    """High-level interface for the nutrition workflow"""
+    """Wrapper class for backward compatibility with the API"""
     
     def __init__(self, openai_api_key: str = None):
-        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY_COMMON_EXPERIENCE")
-        self.workflow = None
-        self._init_workflow()
-    
-    def _init_workflow(self):
-        """Initialize workflow - called within app context"""
-        self.workflow = create_nutrition_workflow(self.openai_api_key)
+        """Initialize the nutrition assistant with the workflow"""
+        self.workflow = create_nutrition_workflow(openai_api_key)
     
     def process_request(self, user_input: str, user_id: str = "default", image_data: str = None) -> Dict[str, Any]:
         """Process a user request through the workflow"""
-        
-        # Ensure workflow is initialized
-        if not self.workflow:
-            self._init_workflow()
-        
-        # Initialize state
-        initial_state = {
-            "user_input": user_input,
-            "user_id": user_id,
-            "image_data": image_data,
-            "category": None,
-            "coordinator_response": None,
-            "chat_history": None,
-            "response": None,
-            "error": None
-        }
-        
         try:
-            # Run the workflow
-            result = self.workflow.invoke(initial_state)
-            
-            # Extract the response
-            if result.get("error"):
-                return {
-                    "success": False,
-                    "error": result["error"],
-                    "reply_html": f"<p>Error: {result['error']}</p>",
-                    "items": []
-                }
-            
-            response = result.get("response", {})
-            return {
-                "success": True,
-                "category": result.get("category"),
-                **response
+            # Create initial state
+            state = {
+                "user_input": user_input,
+                "user_id": user_id,
+                "image_data": image_data,
+                "category": None,
+                "is_specific": None,
+                "chat_history": None,
+                "response": None,
+                "error": None,
+                "previous_action": None,
+                "side_panel_data": None
             }
             
+            # Run the workflow
+            result = self.workflow.invoke(state)
+            
+            # Extract the response
+            if result.get("response"):
+                response = {
+                    "success": True,
+                    "category": result.get("category"),  # Include the category
+                    "reply_html": result["response"].get("reply_html", ""),
+                    "items": result["response"].get("items", []),
+                    "ingredients": result["response"].get("ingredients", []),
+                    "recipe": result["response"].get("recipe"),
+                    "coaching_data": result["response"].get("coaching_data"),
+                    "nutrition_data": result["response"].get("nutrition_data")
+                }
+                
+                # Include side_panel_data if present
+                if result.get("side_panel_data"):
+                    response["side_panel_data"] = result["side_panel_data"]
+                
+                return response
+            else:
+                return {
+                    "success": False,
+                    "reply_html": "<p>I couldn't process your request. Please try again.</p>",
+                    "error": result.get("error", "Unknown error")
+                }
+                
         except Exception as e:
-            print(f"Workflow error: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error in NutritionAssistant.process_request: {e}")
             return {
                 "success": False,
-                "error": str(e),
-                "reply_html": f"<p>System error: {str(e)}</p>",
-                "items": []
+                "reply_html": "<p>An error occurred while processing your request.</p>",
+                "error": str(e)
             }

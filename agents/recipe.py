@@ -50,10 +50,14 @@ class RecipeGenerationAgent(BaseAgent):
             for msg in chat_history[-8:]:
                 # Strip HTML tags to reduce noise
                 cleaned = tag_re.sub("", (msg.content or ""))[:10000]
-                history_messages.append({
+                msg_dict = {
                     "role": msg.role,
                     "content": cleaned
-                })
+                }
+                # Add name for assistant messages
+                if msg.role == "assistant" and msg.name:
+                    msg_dict["name"] = msg.name
+                history_messages.append(msg_dict)
         
         # Build context from preferences
         context_parts = []
@@ -143,6 +147,44 @@ class RecipeGenerationAgent(BaseAgent):
                 "recipe_name": "Recipe Generation Failed"
             }
     
+    def format_recipe_plain_text(self, recipe: Dict[str, Any]) -> str:
+        """Format recipe into plain text for chat history"""
+        
+        if "error" in recipe:
+            return "Sorry, I couldn't generate a recipe right now. Please try again."
+        
+        lines = []
+        lines.append(f"Here's a recipe for {recipe.get('recipe_name', 'your requested dish')}:")
+        lines.append(f"{recipe.get('description', '')}")
+        lines.append("")
+        lines.append(f"Prep time: {recipe.get('prep_time', 'N/A')} minutes")
+        lines.append(f"Cook time: {recipe.get('cook_time', 'N/A')} minutes")
+        lines.append(f"Servings: {recipe.get('servings', 'N/A')}")
+        lines.append("")
+        lines.append("Ingredients:")
+        for ing in recipe.get("ingredients", []):
+            lines.append(f"- {ing['amount']} {ing['name']}")
+        lines.append("")
+        lines.append("Instructions:")
+        for i, step in enumerate(recipe.get("instructions", []), 1):
+            lines.append(f"{i}. {step}")
+        lines.append("")
+        
+        nutrition = recipe.get("nutrition_per_serving", {})
+        if nutrition:
+            lines.append("Nutrition per serving:")
+            lines.append(f"- Calories: {nutrition.get('calories', 'N/A')}")
+            lines.append(f"- Protein: {nutrition.get('protein', 'N/A')}g")
+            lines.append(f"- Carbs: {nutrition.get('carbs', 'N/A')}g")
+            lines.append(f"- Fat: {nutrition.get('fat', 'N/A')}g")
+            lines.append(f"- Fiber: {nutrition.get('fiber', 'N/A')}g")
+        
+        if recipe.get("tips"):
+            lines.append("")
+            lines.append(f"Tips: {recipe.get('tips')}")
+        
+        return "\n".join(lines)
+    
     def format_recipe_response(self, recipe: Dict[str, Any]) -> str:
         """Format recipe into HTML response"""
         
@@ -211,14 +253,31 @@ class RecipeGenerationAgent(BaseAgent):
         
         print(f"Recipe agent processing request: '{user_input}'")
         
+        # Save user message
+        self.save_chat_message(
+            user_id,
+            ChatMessage(
+                role="user",
+                content=user_input,
+                metadata={"category": "recipe_generation"},
+                category="recipe_generation"
+            )
+        )
+        
+        # Get fresh chat history that includes the just-saved user message
+        chat_history = self.get_chat_history(user_id)
+        
         # Analyze dietary preferences from history
         preferences = self.analyze_dietary_preferences(chat_history)
         
-        # Generate recipe with chat history
+        # Generate recipe with updated chat history
         recipe = self.generate_recipe(user_input, preferences, chat_history=chat_history)
         
         # Format response
         response_html = self.format_recipe_response(recipe)
+        
+        # Create a plain text version for chat history
+        plain_text_response = self.format_recipe_plain_text(recipe)
         
         # Extract items for tracking (ingredients from recipe)
         items = []
@@ -230,11 +289,32 @@ class RecipeGenerationAgent(BaseAgent):
                         "grams": ing["grams"]
                     })
         
+        # Save assistant message with plain text for better context in future requests
+        self.save_chat_message(
+            user_id,
+            ChatMessage(
+                role="assistant",
+                content=plain_text_response,  # Use plain text for chat history
+                metadata={"type": "recipe_generation", "recipe": recipe, "html_content": response_html},
+                category="recipe_generation",
+                name="recipe_generator"
+            )
+        )
+        
         # Update state
         state["response"] = {
             "reply_html": response_html,
             "items": items,
             "recipe": recipe
         }
+        state["chat_history"] = self.get_chat_history(user_id)
+        
+        # Set side panel data for recipe display
+        if recipe and "error" not in recipe:
+            state["side_panel_data"] = {
+                "type": "recipe",
+                "recipe": recipe,
+                "items": items  # Include items for potential meal logging
+            }
         
         return state

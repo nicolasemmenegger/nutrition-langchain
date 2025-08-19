@@ -30,10 +30,14 @@ class AnalyzerAgent(BaseAgent):
             for msg in chat_history[-8:]:
                 # Strip HTML tags to reduce noise
                 cleaned = tag_re.sub("", (msg.content or ""))[:10000]
-                history_messages.append({
+                msg_dict = {
                     "role": msg.role,
                     "content": cleaned
-                })
+                }
+                # Add name for assistant messages
+                if msg.role == "assistant" and msg.name:
+                    msg_dict["name"] = msg.name
+                history_messages.append(msg_dict)
         
         user_content = []
         if user_text:
@@ -257,6 +261,24 @@ class AnalyzerAgent(BaseAgent):
         db.session.expire_all()
         return created_ids
     
+    def format_analysis_plain_text(self, items: List[Dict]) -> str:
+        """Format meal analysis into plain text for chat history"""
+        
+        if not items:
+            return "I couldn't identify any specific food items. Please provide more details."
+        
+        lines = []
+        lines.append("I've analyzed your meal and identified the following items:")
+        lines.append("")
+        
+        for item in items:
+            lines.append(f"- {item['ingredient_name']}: {item['grams']}g")
+        
+        lines.append("")
+        lines.append("You can review and adjust the portions in the side panel if needed.")
+        
+        return "\n".join(lines)
+    
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Process meal analysis request"""
         
@@ -267,7 +289,21 @@ class AnalyzerAgent(BaseAgent):
         
         print(f"Analyzer processing: user_input='{user_input[:50]}...', has_image={bool(image_data)}")
         
-        # Parse meal content with chat history
+        # Save user message
+        self.save_chat_message(
+            user_id,
+            ChatMessage(
+                role="user",
+                content=user_input,
+                metadata={"category": "analyze_meal", "has_image": bool(image_data)},
+                category="analyze_meal"
+            )
+        )
+        
+        # Get fresh chat history that includes the just-saved user message
+        chat_history = self.get_chat_history(user_id)
+        
+        # Parse meal content with updated chat history
         parsed = self.parse_meal_content(user_input, image_data, chat_history)
         # Add debug label to analyzer's response
         assistant_html = "<p style='color: red; font-weight: bold;'>[ANALYZER]</p>" + parsed.get("reply_html", "<p>Parsed.</p>")
@@ -320,7 +356,31 @@ class AnalyzerAgent(BaseAgent):
             "ingredients": [{"id": ing.id, "name": ing.name} for ing in all_ingredients]
         }
         
+        # Create plain text summary for chat history
+        plain_text_response = self.format_analysis_plain_text(out)
+        
+        # Save assistant message with plain text for better context
+        self.save_chat_message(
+            user_id,
+            ChatMessage(
+                role="assistant",
+                content=plain_text_response,  # Use plain text for chat history
+                metadata={"type": "analyze_meal", "items": out, "html_content": assistant_html},
+                category="analyze_meal",
+                name="meal_analyzer"
+            )
+        )
+        
         print(f"Analyzer returning {len(out)} items in response")
         state["response"] = response_data
+        state["chat_history"] = self.get_chat_history(user_id)
+        
+        # Set side panel data for meal logging
+        if out:  # If we have items to show
+            state["side_panel_data"] = {
+                "type": "meal",
+                "items": out,
+                "ingredients": [{"id": ing.id, "name": ing.name} for ing in all_ingredients]
+            }
         
         return state

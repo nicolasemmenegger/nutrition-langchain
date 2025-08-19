@@ -83,6 +83,10 @@ def ai_chat():
         if result.get("ingredients"):
             response["ingredients"] = result["ingredients"]
         
+        # Include side panel data if present
+        if result.get("side_panel_data"):
+            response["side_panel_data"] = result["side_panel_data"]
+        
         return jsonify(response)
         
     except Exception as e:
