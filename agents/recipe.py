@@ -38,8 +38,22 @@ class RecipeGenerationAgent(BaseAgent):
         
         return preferences
     
-    def generate_recipe(self, user_request: str, preferences: Dict[str, Any], nutritional_goals: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_recipe(self, user_request: str, preferences: Dict[str, Any], nutritional_goals: Dict[str, Any] = None, chat_history: List[ChatMessage] = None) -> Dict[str, Any]:
         """Generate a recipe based on user request and preferences"""
+        
+        # Build messages with recent chat history as actual turns
+        history_messages = []
+        if chat_history:
+            # Use the most recent few messages to preserve context
+            import re
+            tag_re = re.compile(r"<[^>]+>")
+            for msg in chat_history[-8:]:
+                # Strip HTML tags to reduce noise
+                cleaned = tag_re.sub("", (msg.content or ""))[:10000]
+                history_messages.append({
+                    "role": msg.role,
+                    "content": cleaned
+                })
         
         # Build context from preferences
         context_parts = []
@@ -90,6 +104,7 @@ class RecipeGenerationAgent(BaseAgent):
                     "tips": "cooking tips or variations"
                 }}
             """},
+        ] + list(reversed(history_messages)) + [
             {"role": "user", "content": f"Generate a recipe for: {user_request}\n\nREMEMBER: The recipe MUST match this specific request."}
         ]
         
@@ -199,8 +214,8 @@ class RecipeGenerationAgent(BaseAgent):
         # Analyze dietary preferences from history
         preferences = self.analyze_dietary_preferences(chat_history)
         
-        # Generate recipe
-        recipe = self.generate_recipe(user_input, preferences)
+        # Generate recipe with chat history
+        recipe = self.generate_recipe(user_input, preferences, chat_history=chat_history)
         
         # Format response
         response_html = self.format_recipe_response(recipe)

@@ -18,8 +18,22 @@ class AnalyzerAgent(BaseAgent):
         self.parser_model = "gpt-4o-mini"
         self.nutrition_model = "gpt-4o-mini"
     
-    def parse_meal_content(self, user_text: str = None, image_data: str = None) -> Dict[str, Any]:
+    def parse_meal_content(self, user_text: str = None, image_data: str = None, chat_history: list[ChatMessage] = None) -> Dict[str, Any]:
         """Parse meal content from text and/or image"""
+        
+        # Build messages with recent chat history as actual turns
+        history_messages = []
+        if chat_history:
+            # Use the most recent few messages to preserve context
+            import re
+            tag_re = re.compile(r"<[^>]+>")
+            for msg in chat_history[-8:]:
+                # Strip HTML tags to reduce noise
+                cleaned = tag_re.sub("", (msg.content or ""))[:10000]
+                history_messages.append({
+                    "role": msg.role,
+                    "content": cleaned
+                })
         
         user_content = []
         if user_text:
@@ -32,6 +46,7 @@ class AnalyzerAgent(BaseAgent):
                 {"type": "text", "text": "You are a nutrition parser that extracts ingredients and weights."},
                 {"type": "text", "text": STRUCTURE_SPEC}
             ]},
+        ] + list(reversed(history_messages)) + [
             {"role": "user", "content": user_content},
         ]
         
@@ -44,20 +59,32 @@ class AnalyzerAgent(BaseAgent):
                 # Create a serializable version of messages
                 log_messages = []
                 for msg in messages:
-                    log_msg = {"role": msg["role"]}
-                    if msg["role"] == "system":
-                        log_msg["content"] = [
-                            {"type": c["type"], "text": c["text"]} 
-                            for c in msg["content"]
-                        ]
+                    log_msg = {"role": msg["role"]}  # Always include the role
+                    content = msg["content"]
+                    
+                    # Check if content is a string (history messages) or structured (system/current user)
+                    if isinstance(content, str):
+                        # Simple string content from history
+                        log_msg["content"] = content
+                    elif isinstance(content, list):
+                        # Structured content (system or current user message)
+                        if msg["role"] == "system":
+                            log_msg["content"] = [
+                                {"type": c["type"], "text": c["text"]} 
+                                for c in content
+                            ]
+                        else:
+                            # User message with potential image
+                            log_content = []
+                            for c in content:
+                                if c["type"] == "text":
+                                    log_content.append({"type": "text", "text": c["text"]})
+                                elif c["type"] == "image_url":
+                                    log_content.append({"type": "image_url", "url": "IMAGE_DATA_OMITTED"})
+                            log_msg["content"] = log_content
                     else:
-                        log_content = []
-                        for c in msg["content"]:
-                            if c["type"] == "text":
-                                log_content.append({"type": "text", "text": c["text"]})
-                            elif c["type"] == "image_url":
-                                log_content.append({"type": "image_url", "url": "IMAGE_DATA_OMITTED"})
-                        log_msg["content"] = log_content
+                        log_msg["content"] = content
+                    
                     log_messages.append(log_msg)
                 f.write(json.dumps(log_messages, indent=2))
 
@@ -236,11 +263,12 @@ class AnalyzerAgent(BaseAgent):
         user_input = state.get("user_input", "")
         image_data = state.get("image_data")
         user_id = state.get("user_id", "default")
+        chat_history = state.get("chat_history", [])
         
         print(f"Analyzer processing: user_input='{user_input[:50]}...', has_image={bool(image_data)}")
         
-        # Parse meal content
-        parsed = self.parse_meal_content(user_input, image_data)
+        # Parse meal content with chat history
+        parsed = self.parse_meal_content(user_input, image_data, chat_history)
         # Add debug label to analyzer's response
         assistant_html = "<p style='color: red; font-weight: bold;'>[ANALYZER]</p>" + parsed.get("reply_html", "<p>Parsed.</p>")
         raw_items = parsed.get("items", [])
