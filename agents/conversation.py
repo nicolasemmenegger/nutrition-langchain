@@ -117,9 +117,8 @@ class ConversationAgent(BaseAgent):
                     "timestamp": timestamp
                 }, indent=2))
             
-            # Format response with debug label
-            response_html = f"<p style='color: red; font-weight: bold;'>[CONVERSATION]</p>"
-            response_html += f"<p>{response_text}</p>"
+            # Format response without debug label
+            response_html = f"<p>{response_text}</p>"
             
             # Save assistant message with name
             self.save_chat_message(
@@ -147,7 +146,7 @@ class ConversationAgent(BaseAgent):
             
         except Exception as e:
             print(f"Error in conversation: {e}")
-            error_response = "<p style='color: red; font-weight: bold;'>[CONVERSATION ERROR]</p><p>I'm here to help with your nutrition needs. Could you tell me more about what you'd like to do?</p>"
+            error_response = "<p>I'm here to help with your nutrition needs. Could you tell me more about what you'd like to do?</p>"
             
             state["response"] = {
                 "reply_html": error_response,

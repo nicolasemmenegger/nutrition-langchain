@@ -273,9 +273,6 @@ class RecipeGenerationAgent(BaseAgent):
         # Generate recipe with updated chat history
         recipe = self.generate_recipe(user_input, preferences, chat_history=chat_history)
         
-        # Format response
-        response_html = self.format_recipe_response(recipe)
-        
         # Create a plain text version for chat history
         plain_text_response = self.format_recipe_plain_text(recipe)
         
@@ -295,15 +292,15 @@ class RecipeGenerationAgent(BaseAgent):
             ChatMessage(
                 role="assistant",
                 content=plain_text_response,  # Use plain text for chat history
-                metadata={"type": "recipe_generation", "recipe": recipe, "html_content": response_html},
+                metadata={"type": "recipe_generation", "recipe": recipe},
                 category="recipe_generation",
                 name="recipe_generator"
             )
         )
         
-        # Update state
+        # Update state - don't include HTML in response for chat window
         state["response"] = {
-            "reply_html": response_html,
+            "reply_html": "",  # Empty HTML for chat window
             "items": items,
             "recipe": recipe
         }

@@ -305,8 +305,7 @@ class AnalyzerAgent(BaseAgent):
         
         # Parse meal content with updated chat history
         parsed = self.parse_meal_content(user_input, image_data, chat_history)
-        # Add debug label to analyzer's response
-        assistant_html = "<p style='color: red; font-weight: bold;'>[ANALYZER]</p>" + parsed.get("reply_html", "<p>Parsed.</p>")
+        # Don't include analyzer's HTML in chat - it should only go to side panel
         raw_items = parsed.get("items", [])
         
         print(f"Analyzer got {len(raw_items)} raw items from parsing")
@@ -349,9 +348,9 @@ class AnalyzerAgent(BaseAgent):
             }
             out.append(d)
         
-        # Update state
+        # Update state - don't include HTML content in response
         response_data = {
-            "reply_html": assistant_html,
+            "reply_html": "",  # Empty HTML for chat window
             "items": out,
             "ingredients": [{"id": ing.id, "name": ing.name} for ing in all_ingredients]
         }
@@ -365,7 +364,7 @@ class AnalyzerAgent(BaseAgent):
             ChatMessage(
                 role="assistant",
                 content=plain_text_response,  # Use plain text for chat history
-                metadata={"type": "analyze_meal", "items": out, "html_content": assistant_html},
+                metadata={"type": "analyze_meal", "items": out},
                 category="analyze_meal",
                 name="meal_analyzer"
             )
