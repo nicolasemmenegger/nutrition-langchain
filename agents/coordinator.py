@@ -6,6 +6,8 @@ import os
 from datetime import datetime
 import re
 
+MAX_NUM_MESSAGES_COORDINATOR = 10
+
 class CoordinatorAgent(BaseAgent):
     """Coordinator agent that classifies requests and checks if they're specific enough"""
     
@@ -29,7 +31,7 @@ class CoordinatorAgent(BaseAgent):
         history_messages = []
         if chat_history:
             tag_re = re.compile(r"<[^>]+>")
-            for msg in chat_history[-8:]:
+            for msg in chat_history:
                 cleaned = tag_re.sub("", (msg.content or ""))[:10000]
                 msg_dict = {
                     "role": msg.role,
@@ -130,7 +132,7 @@ class CoordinatorAgent(BaseAgent):
         image_data = state.get("image_data")
         
         # Retrieve chat history
-        chat_history = self.get_chat_history(user_id)
+        chat_history = self.get_chat_history(user_id, limit=MAX_NUM_MESSAGES_COORDINATOR) # you can set a limit here
         
         # Classify and check specificity
         category, is_specific = self.classify_request(user_input, chat_history, has_image=bool(image_data))

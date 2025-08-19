@@ -28,8 +28,9 @@ class BaseAgent(ABC):
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Process the state and return updated state"""
         pass
-    
-    def get_chat_history(self, user_id: str, limit: int = 50) -> List[ChatMessage]:
+
+    # THIS IS WHERE WE SET THE MAX NR MESSAGES IN CONTEXT GLOBALLY
+    def get_chat_history(self, user_id: str, limit: int = 20) -> List[ChatMessage]:
         """Retrieve chat history from database"""
         try:
             # Import here to avoid circular imports
@@ -37,9 +38,10 @@ class BaseAgent(ABC):
             
             # Ensure consistent string user_id keying
             history_records = ChatHistory.get_user_history(str(user_id), limit)
-            
+
+
             messages = []
-            for record in reversed(history_records):  # Reverse to get chronological order
+            for record in history_records:  # Reverse to get chronological order
                 metadata = json.loads(record.message_metadata) if record.message_metadata else None
                 name = metadata.get('name') if metadata else None
                 messages.append(ChatMessage(
@@ -50,7 +52,7 @@ class BaseAgent(ABC):
                     category=record.category,
                     name=name
                 ))
-            
+
             return messages
             
         except Exception as e:

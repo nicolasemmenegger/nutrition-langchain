@@ -9,6 +9,9 @@ from prompts import STRUCTURE_SPEC, NUTRITION_CARD_SPEC
 from models import Ingredient, db
 from sqlalchemy import func
 
+
+MAX_NUM_MESSAGES_ANALYZER = 10
+
 class AnalyzerAgent(BaseAgent):
     """Agent for analyzing meal content from text/images"""
     
@@ -27,7 +30,7 @@ class AnalyzerAgent(BaseAgent):
             # Use the most recent few messages to preserve context
             import re
             tag_re = re.compile(r"<[^>]+>")
-            for msg in chat_history[-8:]:
+            for msg in chat_history:
                 # Strip HTML tags to reduce noise
                 cleaned = tag_re.sub("", (msg.content or ""))[:10000]
                 msg_dict = {
@@ -301,7 +304,7 @@ class AnalyzerAgent(BaseAgent):
         )
         
         # Get fresh chat history that includes the just-saved user message
-        chat_history = self.get_chat_history(user_id)
+        chat_history = self.get_chat_history(user_id, limit=MAX_NUM_MESSAGES_ANALYZER)
         
         # Parse meal content with updated chat history
         parsed = self.parse_meal_content(user_input, image_data, chat_history)

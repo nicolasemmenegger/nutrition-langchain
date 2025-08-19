@@ -6,6 +6,8 @@ import os
 from datetime import datetime
 import re
 
+MAX_NUM_MESSAGES_CONVERSATION = 10
+
 class ConversationAgent(BaseAgent):
     """Agent for handling general conversation and clarification requests"""
     
@@ -27,6 +29,7 @@ class ConversationAgent(BaseAgent):
         # Otherwise, save the user message (direct from coordinator)
         if assistant_response:
             # Coming from analyzer/recipe - save their assistant response
+            print(f"Conversation agent received assistant_response from {assistant_response.get('name')}, content length: {len(assistant_response.get('content', ''))}")
             self.save_chat_message(
                 user_id,
                 ChatMessage(
@@ -39,6 +42,7 @@ class ConversationAgent(BaseAgent):
             )
         else:
             # Coming directly from coordinator - save user message
+            print(f"Conversation agent saving user message: '{user_input[:50]}...'")
             self.save_chat_message(
                 user_id,
                 ChatMessage(
@@ -50,14 +54,14 @@ class ConversationAgent(BaseAgent):
             )
         
         # Get fresh chat history that includes the just-saved message
-        chat_history = self.get_chat_history(user_id)
+        chat_history = self.get_chat_history(user_id, limit=MAX_NUM_MESSAGES_CONVERSATION)
         
         # Build messages with recent chat history
         history_messages = []
         if chat_history:
             # Use the most recent messages to preserve context
             tag_re = re.compile(r"<[^>]+>")
-            for msg in chat_history[-8:]:
+            for msg in chat_history:
                 # Strip HTML tags to reduce noise
                 cleaned = tag_re.sub("", (msg.content or ""))[:10000]
                 msg_dict = {

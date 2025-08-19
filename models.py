@@ -93,7 +93,7 @@ class ChatHistory(db.Model):
         }
     
     @classmethod
-    def get_user_history(cls, user_id, limit=10):
+    def get_user_history(cls, user_id, limit=50):
         """Get chat history for a user"""
         return cls.query.filter_by(user_id=user_id)\
             .order_by(cls.timestamp.desc())\
@@ -108,7 +108,8 @@ class ChatHistory(db.Model):
             role=role,
             content=content,
             message_metadata=json.dumps(metadata) if metadata else None,
-            category=category
+            category=category,
+            timestamp=datetime.now(timezone.utc)  # Explicitly set timestamp
         )
         db.session.add(message)
         db.session.commit()

@@ -5,6 +5,9 @@ import json
 import os
 from datetime import datetime
 
+
+MAX_NUM_MESSAGES_RECIPE_GENERATOR = 3
+
 class RecipeGenerationAgent(BaseAgent):
     """Agent for generating healthy recipe suggestions"""
     
@@ -47,7 +50,7 @@ class RecipeGenerationAgent(BaseAgent):
             # Use the most recent few messages to preserve context
             import re
             tag_re = re.compile(r"<[^>]+>")
-            for msg in chat_history[-8:]:
+            for msg in chat_history:
                 # Strip HTML tags to reduce noise
                 cleaned = tag_re.sub("", (msg.content or ""))[:10000]
                 msg_dict = {
@@ -249,11 +252,11 @@ class RecipeGenerationAgent(BaseAgent):
         
         user_input = state.get("user_input", "")
         user_id = state.get("user_id", "default")
-        chat_history = state.get("chat_history", [])
-        
+
         print(f"Recipe agent processing request: '{user_input}'")
         
         # Save the user message - the conversation agent won't save it since we'll pass an assistant_response
+        print(f"Recipe agent saving user message to chat history")
         self.save_chat_message(
             user_id,
             ChatMessage(
@@ -263,9 +266,10 @@ class RecipeGenerationAgent(BaseAgent):
                 category="recipe_generation"
             )
         )
+        print(f"Recipe agent successfully saved user message")
         
         # Get fresh chat history that includes the just-saved user message
-        chat_history = self.get_chat_history(user_id)
+        chat_history = self.get_chat_history(user_id, limit=MAX_NUM_MESSAGES_RECIPE_GENERATOR)
         
         # Analyze dietary preferences from history
         preferences = self.analyze_dietary_preferences(chat_history)
@@ -292,6 +296,7 @@ class RecipeGenerationAgent(BaseAgent):
             "metadata": {"type": "recipe_generation", "recipe": recipe},
             "name": "recipe_generator"
         }
+        print(f"Recipe generator setting assistant_response with content length: {len(plain_text_response)}")
         
         # Update state - don't include HTML in response for chat window
         state["response"] = {
