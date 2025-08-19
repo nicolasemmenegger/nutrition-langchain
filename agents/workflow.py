@@ -2,7 +2,6 @@ from typing import TypedDict, Optional, Dict, Any, Literal
 from langgraph.graph import StateGraph, START, END
 from .coordinator import CoordinatorAgent
 from .analyzer import AnalyzerAgent
-from .web_search import WebSearchAgent
 from .recipe import RecipeGenerationAgent
 from .coaching import CoachingAgent
 from .conversation import ConversationAgent
@@ -30,7 +29,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
     # Initialize agents
     coordinator = CoordinatorAgent(openai_api_key)
     analyzer = AnalyzerAgent(openai_api_key)
-    web_search = WebSearchAgent(openai_api_key)
     recipe_gen = RecipeGenerationAgent(openai_api_key)
     coaching = CoachingAgent(openai_api_key)
     conversation = ConversationAgent(openai_api_key)
@@ -64,20 +62,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
             state["previous_action"] = "analyze_meal_error"
             return state
     
-    def search_web(state: State) -> State:
-        """Web search node"""
-        try:
-            result_state = web_search.process(state)
-            result_state["previous_action"] = "web_search"
-            return result_state
-        except Exception as e:
-            state["error"] = f"Web search error: {str(e)}"
-            state["response"] = {
-                "reply_html": f"<p>I couldn't find nutrition information for that item. Please try describing it differently.</p>",
-                "items": []
-            }
-            state["previous_action"] = "web_search_error"
-            return state
     
     def generate_recipe(state: State) -> State:
         """Recipe generation node"""
@@ -127,7 +111,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
     # Add nodes to the graph
     workflow.add_node("coordinator", coordinate)
     workflow.add_node("analyzer", analyze_meal)
-    workflow.add_node("web_search", search_web)
     workflow.add_node("recipe_generation", generate_recipe)
     workflow.add_node("coaching", provide_coaching)
     workflow.add_node("conversation", handle_conversation)
@@ -140,7 +123,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
         # Map categories to node names
         routing_map = {
             "analyze_meal": "analyzer",
-            "web_search": "web_search",
             "recipe_generation": "recipe_generation",
             "coaching": "coaching",
             "conversation": "conversation"
@@ -155,7 +137,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
         route_from_coordinator,
         {
             "analyzer": "analyzer",
-            "web_search": "web_search",
             "recipe_generation": "recipe_generation",
             "coaching": "coaching",
             "conversation": "conversation"
@@ -167,7 +148,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
     workflow.add_edge("recipe_generation", "conversation")
     
     # These still go to END as they're typically final
-    workflow.add_edge("web_search", END)
     workflow.add_edge("coaching", END)
     workflow.add_edge("conversation", END)
     

@@ -77,8 +77,6 @@ def ai_chat():
             response["recipe"] = result["recipe"]
         elif result.get("category") == "coaching" and result.get("coaching_data"):
             response["coaching_data"] = result["coaching_data"]
-        elif result.get("category") == "web_search" and result.get("nutrition_data"):
-            response["nutrition_data"] = result["nutrition_data"]
         
         # Include all ingredients for frontend
         if result.get("ingredients"):

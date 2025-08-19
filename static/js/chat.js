@@ -193,12 +193,6 @@ class NutritionChat {
             } else if (data.category === 'recipe_generation' && data.recipe) {
                 console.log('Opening recipe panel (legacy)');
                 this.showRecipePanel(data.recipe);
-            } else if (data.category === 'web_search' && data.nutrition_data) {
-                // For web search results, we might want to show a simplified meal panel
-                if (data.nutrition_data.found) {
-                    console.log('Showing nutrition info');
-                    this.showNutritionInfo(data.nutrition_data);
-                }
             } else {
                 console.log('No panel action taken. Category:', data.category, 'Items:', data.items);
             }

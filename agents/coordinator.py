@@ -11,7 +11,7 @@ MAX_NUM_MESSAGES_COORDINATOR = 10
 class CoordinatorAgent(BaseAgent):
     """Coordinator agent that classifies requests and checks if they're specific enough"""
     
-    CATEGORIES = ["analyze_meal", "recipe_generation", "web_search", "coaching", "conversation"]
+    CATEGORIES = ["analyze_meal", "recipe_generation", "coaching", "conversation"]
     
     def __init__(self, openai_api_key: str):
         super().__init__("coordinator", openai_api_key)
