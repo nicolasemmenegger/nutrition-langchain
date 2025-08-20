@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from utils import _png_base64, calculate_meal_nutrition
@@ -8,6 +8,7 @@ from models import db, Meal, MealNutrition, Ingredient, IngredientUsage, ChatHis
 from datetime import datetime
 from dotenv import load_dotenv
 import os
+import threading
 import uuid
 import json
 import io
@@ -355,6 +356,7 @@ def list_recipes():
             "servings": r.servings,
             "prep_time": r.prep_time,
             "cook_time": r.cook_time,
+            "image_url": r.image_url,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
     return jsonify({"recipes": [_r(r) for r in rows]})
@@ -387,7 +389,62 @@ def save_recipe():
     )
     db.session.add(recipe)
     db.session.commit()
+    # If no image was provided, generate one asynchronously
+    try:
+        if not data.get('image_url'):
+            app = current_app._get_current_object()
+            threading.Thread(
+                target=_generate_recipe_image_async,
+                args=(recipe.id, recipe.name, app),
+                daemon=True
+            ).start()
+    except Exception as _bg_e:
+        # Non-fatal; proceed without blocking the response
+        print('Failed to start background image generation:', str(_bg_e))
     return jsonify({"success": True, "id": recipe.id})
+
+
+def _generate_recipe_image_async(recipe_id: int, recipe_name: str, app):
+    """Background task to generate a recipe image and update the DB when ready."""
+    try:
+        from openai import OpenAI
+        img_api_key = os.getenv("OPENAI_API_KEY_IMAGE") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_COMMON_EXPERIENCE")
+        if not img_api_key:
+            return
+        client = OpenAI(api_key=img_api_key)
+        prompt = (
+            f"Professional food photography of: {recipe_name or 'a healthy dish'}. "
+            "Uncropped, full plate in frame with ample margins; do not crop edges. "
+            "Top-down or 45-degree angle, natural lighting, vibrant colors, appetizing presentation."
+        )
+        img = client.images.generate(
+            model="gpt-image-1",
+            prompt=prompt,
+            size="1024x1024",
+            n=1,
+        )
+        image_url = None
+        try:
+            if hasattr(img, 'data') and img.data:
+                if getattr(img.data[0], 'b64_json', None):
+                    image_url = f"data:image/png;base64,{img.data[0].b64_json}"
+                elif getattr(img.data[0], 'url', None):
+                    image_url = img.data[0].url
+        except Exception:
+            image_url = None
+        if not image_url:
+            return
+        # Update DB record under application context
+        with app.app_context():
+            row = SavedRecipe.query.get(int(recipe_id))
+            if row and not getattr(row, 'image_url', None):
+                row.image_url = image_url
+                db.session.commit()
+    except Exception as e:
+        try:
+            print(f"Background recipe image generation failed for {recipe_id}: {e}")
+        except Exception:
+            pass
 
 
 @api_bp.route('/advice/today', methods=['GET'])

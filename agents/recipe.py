@@ -278,46 +278,8 @@ class RecipeGenerationAgent(BaseAgent):
         # Generate recipe with updated chat history
         recipe = self.generate_recipe(user_input, preferences, chat_history=chat_history)
         
-        # Optionally generate an image for the recipe using gpt-image-1
-        try:
-            if recipe and 'error' not in recipe:
-                prompt = (
-                    f"Professional food photography of: {recipe.get('recipe_name','a healthy dish')}. "
-                    "Uncropped, full plate in frame with ample margins; do not crop edges. "
-                    "Top-down or 45-degree angle, natural lighting, vibrant colors, appetizing presentation."
-                )
-                # Use a fallback key for image generation if provided
-                img_api_key = os.getenv("OPENAI_API_KEY_IMAGE") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_COMMON_EXPERIENCE")
-                img_client = OpenAI(api_key=img_api_key)
-                img = img_client.images.generate(
-                    model="gpt-image-1",
-                    prompt=prompt,
-                    size="1024x1024",
-                    n=1,
-                )
-                image_url = None
-                # Prefer URL if provided
-                try:
-                    if hasattr(img, 'data') and img.data:
-                        # Many SDK versions return base64 by default
-                        if getattr(img.data[0], 'b64_json', None):
-                            image_url = f"data:image/png;base64,{img.data[0].b64_json}"
-                        # Some deployments may return a hosted URL instead
-                        elif getattr(img.data[0], 'url', None):
-                            image_url = img.data[0].url
-                except Exception:
-                    image_url = None
-                if image_url:
-                    recipe['image_url'] = image_url
-        except Exception as e:
-            # Non-fatal if image generation fails
-            print(f"Recipe image generation failed: {e}")
-            try:
-                os.makedirs("logs", exist_ok=True)
-                with open(f"logs/recipe_image_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log", 'w') as f:
-                    f.write(str(e))
-            except Exception:
-                pass
+        # Intentionally skip image generation during chat to improve responsiveness.
+        # Images will be generated after the recipe is saved and displayed on the recipes page.
 
         # Create a plain text version for chat history
         plain_text_response = self.format_recipe_plain_text(recipe)

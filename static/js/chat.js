@@ -380,16 +380,10 @@ class NutritionChat {
         document.getElementById('recipeDescription').textContent = recipe.description;
         document.getElementById('recipeTime').textContent = `${recipe.prep_time} min prep, ${recipe.cook_time} min cook`;
         document.getElementById('recipeServings').textContent = `${recipe.servings} servings`;
-        // Image (if any)
+        // Do not display image in sidebar to keep the chat responsive
         try {
             const wrap = document.getElementById('recipeImageWrap');
-            const img = document.getElementById('recipeImage');
-            if (recipe.image_url) {
-                img.src = recipe.image_url;
-                wrap.style.display = 'block';
-            } else {
-                wrap.style.display = 'none';
-            }
+            if (wrap) wrap.style.display = 'none';
         } catch {}
         
         // Ingredients
