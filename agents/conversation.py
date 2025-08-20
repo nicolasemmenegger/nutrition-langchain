@@ -113,7 +113,7 @@ class ConversationAgent(BaseAgent):
                 f.write(json.dumps(messages, indent=2))
             
             response = self.client.chat.completions.create(
-                model="gpt-4o-realtime-preview",
+                model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.7,
             )
