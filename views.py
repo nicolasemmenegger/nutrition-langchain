@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from auth import login_required, create_user, authenticate_user
-from models import Ingredient, Meal, IngredientUsage, MealNutrition, db
+from models import Ingredient, Meal, IngredientUsage, MealNutrition, SavedRecipe, db
 from datetime import datetime, timedelta
 import json
 from utils import calculate_meal_nutrition, get_meals_for_date, get_daily_nutrition_history, get_user_favorite_meal, get_ingredient_cloud_data
@@ -124,6 +124,15 @@ def dashboard():
     favorite_meal = get_user_favorite_meal(session['user_id'])
     ingredient_cloud = get_ingredient_cloud_data(session['user_id'], start_date, selected_date)
     return render_template('dashboard.html', meals=meals_grouped, history=history, selected_date=selected_date, favorite_meal=favorite_meal, ingredient_cloud=ingredient_cloud)
+
+
+@views_bp.route('/recipes')
+@limiter.limit("1 per minute")
+@login_required
+def recipes():
+    """Saved recipes page"""
+    rows = SavedRecipe.query.filter_by(user_id=session['user_id']).order_by(SavedRecipe.created_at.desc()).all()
+    return render_template('recipes.html', recipes=rows)
 
 @limiter.limit("1 per minute")
 @views_bp.route('/add_meal', methods=['GET', 'POST'])

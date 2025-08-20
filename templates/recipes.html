@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "navbar.html" %}
+<div class="flex flex-col items-center justify-start min-h-screen py-6">
+  <div class="w-full max-w-6xl px-4">
+    <h1 class="text-2xl font-bold text-primary mb-6">Saved Recipes</h1>
+
+    {% if not recipes or recipes|length == 0 %}
+      <div class="text-sm text-gray-500">No recipes saved yet.</div>
+    {% else %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for r in recipes %}
+      <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+        <h3 class="text-lg font-semibold mb-1">{{ r.name }}</h3>
+        {% if r.image_url %}
+        <div class="mt-2">
+          <img src="{{ r.image_url }}" alt="{{ r.name }} image" class="w-full rounded-md" />
+        </div>
+        {% endif %}
+        {% if r.description %}
+        <p class="text-sm text-gray-600 mb-2">{{ r.description }}</p>
+        {% endif %}
+        {% set meta = [] %}
+        {% if r.servings %}{% set _ = meta.append(r.servings ~ ' servings') %}{% endif %}
+        {% if r.prep_time %}{% set _ = meta.append(r.prep_time ~ ' min prep') %}{% endif %}
+        {% if r.cook_time %}{% set _ = meta.append(r.cook_time ~ ' min cook') %}{% endif %}
+        {% if meta|length %}
+        <div class="text-xs text-gray-500 mb-2">{{ meta|join(' • ') }}</div>
+        {% endif %}
+
+        {% if r.ingredients %}
+        <div class="mt-2">
+          <h4 class="font-medium">Ingredients</h4>
+          <ul class="list-disc list-inside text-sm">
+            {% for i in r.ingredients %}
+            <li>{{ i.amount if i.amount }} {{ i.name if i.name }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if r.instructions %}
+        <div class="mt-3">
+          <h4 class="font-medium">How to prepare</h4>
+          <ol class="list-decimal list-inside text-sm space-y-1">
+            {% for s in r.instructions %}
+            <li>{{ s }}</li>
+            {% endfor %}
+          </ol>
+        </div>
+        {% endif %}
+
+        {% if r.nutrition_per_serving %}
+        <div class="mt-3">
+          <h4 class="font-medium">Nutrition per serving</h4>
+          <div class="grid grid-cols-4 gap-3 text-sm mt-1">
+            <div>
+              <div class="text-xs text-gray-500">Calories</div>
+              <div>{{ r.nutrition_per_serving.calories or 0 }}</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-500">Protein</div>
+              <div>{{ r.nutrition_per_serving.protein or 0 }}g</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-500">Carbs</div>
+              <div>{{ r.nutrition_per_serving.carbs or 0 }}g</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-500">Fat</div>
+              <div>{{ r.nutrition_per_serving.fat or 0 }}g</div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -3,7 +3,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from utils import _png_base64, calculate_meal_nutrition
 from agents.workflow import NutritionAssistant
-from models import db, Meal, MealNutrition, Ingredient, IngredientUsage, ChatHistory
+from models import db, Meal, MealNutrition, Ingredient, IngredientUsage, ChatHistory, SavedRecipe
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -329,6 +329,61 @@ def transcribe_audio():
     except Exception as e:
         print("transcribe_audio error:", str(e))
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route('/recipes', methods=['GET'])
+def list_recipes():
+    if 'user_id' not in session:
+        return jsonify({"recipes": []})
+    try:
+        user_id = int(session['user_id'])
+    except Exception:
+        return jsonify({"recipes": []})
+    rows = SavedRecipe.query.filter_by(user_id=user_id).order_by(SavedRecipe.created_at.desc()).all()
+    def _r(r):
+        return {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+            "ingredients": r.ingredients,
+            "instructions": r.instructions,
+            "nutrition_per_serving": r.nutrition_per_serving,
+            "servings": r.servings,
+            "prep_time": r.prep_time,
+            "cook_time": r.cook_time,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+    return jsonify({"recipes": [_r(r) for r in rows]})
+
+
+@api_bp.route('/recipes', methods=['POST'])
+def save_recipe():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    try:
+        user_id = int(session['user_id'])
+    except Exception:
+        return jsonify({"success": False, "error": "Invalid session user"}), 401
+
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({"success": False, "error": "Missing recipe name"}), 400
+    recipe = SavedRecipe(
+        user_id=user_id,
+        name=name,
+        description=data.get('description'),
+        ingredients=data.get('ingredients'),
+        instructions=data.get('instructions'),
+        nutrition_per_serving=data.get('nutrition_per_serving'),
+        servings=data.get('servings'),
+        prep_time=data.get('prep_time'),
+        cook_time=data.get('cook_time'),
+        image_url=data.get('image_url')
+    )
+    db.session.add(recipe)
+    db.session.commit()
+    return jsonify({"success": True, "id": recipe.id})
 
 
 @api_bp.route("/compute_nutrition", methods=["POST"])

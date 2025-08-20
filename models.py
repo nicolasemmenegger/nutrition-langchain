@@ -120,3 +120,33 @@ class ChatHistory(db.Model):
         """Delete all chat messages for a user"""
         cls.query.filter_by(user_id=str(user_id)).delete()
         db.session.commit()
+
+
+class SavedRecipe(db.Model):
+    """Recipes saved by users from the chat interface"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    ingredients = db.Column(db.JSON)  # list of { name, amount, grams? }
+    instructions = db.Column(db.JSON)  # list of strings
+    nutrition_per_serving = db.Column(db.JSON)  # { calories, protein, carbs, fat }
+    servings = db.Column(db.Integer)
+    prep_time = db.Column(db.Integer)
+    cook_time = db.Column(db.Integer)
+    image_url = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<SavedRecipe {self.id} {self.name}>"
+
+
+class SavedRecipeImage(db.Model):
+    """Optional image associated with a saved recipe."""
+    id = db.Column(db.Integer, primary_key=True)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('saved_recipe.id'), index=True, nullable=False)
+    image_url = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<SavedRecipeImage {self.id} recipe={self.recipe_id}>"

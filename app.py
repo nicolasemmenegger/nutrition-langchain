@@ -11,6 +11,7 @@ from api import api_bp
 from views import views_bp
 import os
 from initialize_ingredients import add_ingredients_to_db
+from sqlalchemy import text
 
 
 def create_app(config_name=None):
@@ -35,6 +36,16 @@ def create_app(config_name=None):
     # Create database tables
     with app.app_context():
         db.create_all()
+        # Lightweight migration: ensure image_url exists on saved_recipe
+        try:
+            result = db.session.execute(text("PRAGMA table_info(saved_recipe)"))
+            cols = [row[1] for row in result.fetchall()]
+            if 'image_url' not in cols:
+                db.session.execute(text("ALTER TABLE saved_recipe ADD COLUMN image_url VARCHAR(500)"))
+                db.session.commit()
+        except Exception as e:
+            # Non-fatal; log and continue
+            print("Startup migration check failed:", e)
         add_ingredients_to_db()
     return app
 

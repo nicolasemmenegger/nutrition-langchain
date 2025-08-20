@@ -380,6 +380,17 @@ class NutritionChat {
         document.getElementById('recipeDescription').textContent = recipe.description;
         document.getElementById('recipeTime').textContent = `${recipe.prep_time} min prep, ${recipe.cook_time} min cook`;
         document.getElementById('recipeServings').textContent = `${recipe.servings} servings`;
+        // Image (if any)
+        try {
+            const wrap = document.getElementById('recipeImageWrap');
+            const img = document.getElementById('recipeImage');
+            if (recipe.image_url) {
+                img.src = recipe.image_url;
+                wrap.style.display = 'block';
+            } else {
+                wrap.style.display = 'none';
+            }
+        } catch {}
         
         // Ingredients
         const ingredientsList = document.getElementById('recipeIngredients');
@@ -515,9 +526,35 @@ class NutritionChat {
     }
     
     saveRecipe() {
-        // Save recipe for later (would implement backend endpoint)
-        console.log('Saving recipe:', this.pendingRecipeData);
-        // Don't add a hardcoded message - let the backend handle appropriate responses
+        // Save recipe for later
+        try {
+            if (!this.pendingRecipeData) return;
+            const r = this.pendingRecipeData;
+            const payload = {
+                name: r.recipe_name || r.name || 'Recipe',
+                description: r.description || '',
+                ingredients: r.ingredients || [],
+                instructions: r.instructions || [],
+                nutrition_per_serving: r.nutrition_per_serving || null,
+                servings: r.servings || null,
+                prep_time: r.prep_time || null,
+                cook_time: r.cook_time || null,
+                image_url: r.image_url || null,
+            };
+            fetch('/api/recipes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(res => {
+                if (res && res.success) {
+                    this.addMessage('Recipe saved to your collection.', 'assistant');
+                } else {
+                    this.addMessage('Failed to save recipe.', 'assistant');
+                }
+            }).catch(() => this.addMessage('Failed to save recipe.', 'assistant'));
+        } catch (e) {
+            console.error('saveRecipe error', e);
+        }
     }
     
     removeIngredient(index) {
