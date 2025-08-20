@@ -125,7 +125,7 @@ class RecipeGenerationAgent(BaseAgent):
                 f.write(json.dumps(messages, indent=2))
 
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o-realtime-preview",
                 messages=messages,
                 temperature=0.7,
                 response_format={"type": "json_object"},
