@@ -11,7 +11,7 @@ MAX_NUM_MESSAGES_COORDINATOR = 10
 class CoordinatorAgent(BaseAgent):
     """Coordinator agent that classifies requests and checks if they're specific enough"""
     
-    CATEGORIES = ["analyze_meal", "recipe_generation", "coaching", "conversation"]
+    CATEGORIES = ["analyze_meal", "recipe_generation", "conversation"]
     
     def __init__(self, openai_api_key: str):
         super().__init__("coordinator", openai_api_key)
@@ -52,7 +52,6 @@ class CoordinatorAgent(BaseAgent):
                 - analyze_meal: User wants to log food items with sufficient precision (e.g., "I had eggs and toast", "150g of chicken breast")
                 - recipe_generation: User wants a recipe suggestion and provides some minimal context. ("What could I eat for breakfast")
                     * At least some context should be specified  (e.g. whether it's lunch or dinner or breakfast or whether a specific ingredient is present: "I need to use this tofu")
-                - coaching: User wants some general advice (e.g. "How could I improve my diet")
                 - conversation: General chat, greetings, meal logging requests that need some clarification and recipe generation requests that need some clarification ("Hi" or "I ate pasta today" or "Help me find what to eat" all warrant some follow-ups, so conversation is appropriate)
 
                 Pointers:

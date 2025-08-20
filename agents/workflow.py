@@ -3,7 +3,6 @@ from langgraph.graph import StateGraph, START, END
 from .coordinator import CoordinatorAgent
 from .analyzer import AnalyzerAgent
 from .recipe import RecipeGenerationAgent
-from .coaching import CoachingAgent
 from .conversation import ConversationAgent
 import os
 
@@ -30,7 +29,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
     coordinator = CoordinatorAgent(openai_api_key)
     analyzer = AnalyzerAgent(openai_api_key)
     recipe_gen = RecipeGenerationAgent(openai_api_key)
-    coaching = CoachingAgent(openai_api_key)
     conversation = ConversationAgent(openai_api_key)
     
     # Create the graph
@@ -78,21 +76,7 @@ def create_nutrition_workflow(openai_api_key: str = None):
             }
             state["previous_action"] = "recipe_generation_error"
             return state
-    
-    def provide_coaching(state: State) -> State:
-        """Coaching node"""
-        try:
-            result_state = coaching.process(state)
-            result_state["previous_action"] = "coaching"
-            return result_state
-        except Exception as e:
-            state["error"] = f"Coaching error: {str(e)}"
-            state["response"] = {
-                "reply_html": f"<p>I couldn't provide coaching advice right now. Please try again.</p>",
-                "coaching_data": {}
-            }
-            state["previous_action"] = "coaching_error"
-            return state
+
     
     def handle_conversation(state: State) -> State:
         """Conversation node - handles clarifications and general chat"""
@@ -112,7 +96,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
     workflow.add_node("coordinator", coordinate)
     workflow.add_node("analyzer", analyze_meal)
     workflow.add_node("recipe_generation", generate_recipe)
-    workflow.add_node("coaching", provide_coaching)
     workflow.add_node("conversation", handle_conversation)
     
     # Define routing logic
@@ -124,7 +107,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
         routing_map = {
             "analyze_meal": "analyzer",
             "recipe_generation": "recipe_generation",
-            "coaching": "coaching",
             "conversation": "conversation"
         }
         
@@ -138,7 +120,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
         {
             "analyzer": "analyzer",
             "recipe_generation": "recipe_generation",
-            "coaching": "coaching",
             "conversation": "conversation"
         }
     )
@@ -148,7 +129,6 @@ def create_nutrition_workflow(openai_api_key: str = None):
     workflow.add_edge("recipe_generation", "conversation")
     
     # These still go to END as they're typically final
-    workflow.add_edge("coaching", END)
     workflow.add_edge("conversation", END)
     
     # Compile the graph
@@ -190,7 +170,6 @@ class NutritionAssistant:
                     "items": result["response"].get("items", []),
                     "ingredients": result["response"].get("ingredients", []),
                     "recipe": result["response"].get("recipe"),
-                    "coaching_data": result["response"].get("coaching_data"),
                     "nutrition_data": result["response"].get("nutrition_data")
                 }
                 
