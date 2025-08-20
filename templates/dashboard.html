@@ -20,6 +20,16 @@
     </form>
     <div class="flex flex-col items-center justify-start w-full mt-8">
       <h1 class="text-2xl font-bold text-primary">Nutrition Summary</h1>
+      <!-- Tip of the Day -->
+      <div class="w-full mt-6">
+        <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-lg font-semibold">Tip of the Day</h2>
+            <button id="regenAdvice" class="btn btn-secondary">Generate New Tip</button>
+          </div>
+          <div id="adviceText" class="text-gray-800 text-sm">{{ today_advice or 'No tip yet for today.' }}</div>
+        </div>
+      </div>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full mt-6">
         <!-- Ingredient Word Cloud -->
         <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm lg:col-span-3">
@@ -259,5 +269,31 @@
   })();
 
   // Recipes are shown on their own page now; no fetching here
+  // Tip of the Day handlers
+  (function adviceHandlers() {
+    const btn = document.getElementById('regenAdvice');
+    const textEl = document.getElementById('adviceText');
+    if (!btn || !textEl) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const prev = textEl.textContent;
+      textEl.textContent = 'Generating a new tip…';
+      try {
+        const selectedDateInput = document.getElementById('date');
+        const selectedDate = selectedDateInput ? selectedDateInput.value : null;
+        const res = await fetch('/api/advice/today', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: selectedDate }) });
+        const data = await res.json();
+        if (data && data.success && data.advice) {
+          textEl.textContent = data.advice;
+        } else {
+          textEl.textContent = prev;
+        }
+      } catch (e) {
+        textEl.textContent = prev;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
 </script>
 {% endblock %}

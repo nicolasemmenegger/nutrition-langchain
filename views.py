@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from auth import login_required, create_user, authenticate_user
-from models import Ingredient, Meal, IngredientUsage, MealNutrition, SavedRecipe, db
+from models import Ingredient, Meal, IngredientUsage, MealNutrition, SavedRecipe, DailyAdvice, db
 from datetime import datetime, timedelta
 import json
 from utils import calculate_meal_nutrition, get_meals_for_date, get_daily_nutrition_history, get_user_favorite_meal, get_ingredient_cloud_data
@@ -123,7 +123,15 @@ def dashboard():
     history = get_daily_nutrition_history(session['user_id'], start_date, selected_date)
     favorite_meal = get_user_favorite_meal(session['user_id'])
     ingredient_cloud = get_ingredient_cloud_data(session['user_id'], start_date, selected_date)
-    return render_template('dashboard.html', meals=meals_grouped, history=history, selected_date=selected_date, favorite_meal=favorite_meal, ingredient_cloud=ingredient_cloud)
+    # Tip of the Day: load existing
+    today_advice = None
+    try:
+        row = DailyAdvice.query.filter_by(user_id=session['user_id'], date=selected_date).first()
+        if row:
+            today_advice = row.advice
+    except Exception:
+        today_advice = None
+    return render_template('dashboard.html', meals=meals_grouped, history=history, selected_date=selected_date, favorite_meal=favorite_meal, ingredient_cloud=ingredient_cloud, today_advice=today_advice)
 
 
 @views_bp.route('/recipes')

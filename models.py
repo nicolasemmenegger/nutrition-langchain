@@ -150,3 +150,20 @@ class SavedRecipeImage(db.Model):
 
     def __repr__(self):
         return f"<SavedRecipeImage {self.id} recipe={self.recipe_id}>"
+
+
+class DailyAdvice(db.Model):
+    """Stores a single tip/advice per user per date."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    advice = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'date', name='uq_daily_advice_user_date'),
+    )
+
+    def __repr__(self):
+        return f"<DailyAdvice {self.user_id} {self.date}>"

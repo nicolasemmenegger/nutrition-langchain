@@ -3,7 +3,8 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from utils import _png_base64, calculate_meal_nutrition
 from agents.workflow import NutritionAssistant
-from models import db, Meal, MealNutrition, Ingredient, IngredientUsage, ChatHistory, SavedRecipe
+from agents.advice import AdviceAgent
+from models import db, Meal, MealNutrition, Ingredient, IngredientUsage, ChatHistory, SavedRecipe, DailyAdvice
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -16,6 +17,9 @@ load_dotenv()
 # Initialize the nutrition assistant with LangGraph workflow
 nutrition_assistant = NutritionAssistant(
     openai_api_key=os.getenv("OPENAI_API_KEY_COMMON_EXPERIENCE")
+)
+advice_agent = AdviceAgent(
+    openai_api_key=os.getenv("OPENAI_API_KEY_COMMON_EXPERIENCE") or os.getenv("OPENAI_API_KEY")
 )
 
 api_bp = Blueprint('api', __name__)
@@ -384,6 +388,42 @@ def save_recipe():
     db.session.add(recipe)
     db.session.commit()
     return jsonify({"success": True, "id": recipe.id})
+
+
+@api_bp.route('/advice/today', methods=['GET'])
+def get_today_advice():
+    if 'user_id' not in session:
+        return jsonify({"advice": None})
+    try:
+        user_id = int(session['user_id'])
+    except Exception:
+        return jsonify({"advice": None})
+    # Optional date query param (YYYY-MM-DD); default: today
+    date_str = (request.args.get('date') or '').strip()
+    try:
+        target_date = datetime.fromisoformat(date_str).date() if date_str else datetime.utcnow().date()
+    except Exception:
+        target_date = datetime.utcnow().date()
+    row = db.session.query(DailyAdvice).filter_by(user_id=user_id, date=target_date).first()
+    return jsonify({"advice": row.advice if row else None})
+
+
+@api_bp.route('/advice/today', methods=['POST'])
+def regenerate_today_advice():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    try:
+        user_id = int(session['user_id'])
+    except Exception:
+        return jsonify({"success": False, "error": "Invalid session user"}), 401
+    body = request.json or {}
+    date_str = (body.get('date') or '').strip()
+    try:
+        target_date = datetime.fromisoformat(date_str).date() if date_str else datetime.utcnow().date()
+    except Exception:
+        target_date = datetime.utcnow().date()
+    row = advice_agent.upsert_tip_for_date(user_id, target_date)
+    return jsonify({"success": True, "advice": row.advice})
 
 
 @api_bp.route("/compute_nutrition", methods=["POST"])
