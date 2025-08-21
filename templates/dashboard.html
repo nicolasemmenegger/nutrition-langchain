@@ -11,7 +11,7 @@
 
 {% block content %}
 {% include "navbar.html" %}
-<div class="flex flex-col items-center justify-start min-h-screen py-6">
+<div class="flex flex-col items-center justify-start min-h-screen py-6 pt-20">
   <!-- Enter date and get meals for that date. Nutrition which is a table with the following columns: Meal, Calories, Protein, Carbs, Fat -->
   <div class="flex flex-col items-center justify-start w-full max-w-6xl px-4">
     <form action="{{ url_for('views.dashboard') }}" method="post">
